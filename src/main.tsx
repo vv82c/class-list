@@ -7,9 +7,6 @@ import './index.css';
 
 registerSW({
   immediate: true,
-  onRegisteredSW(url) {
-    console.log('SW registered at', url);
-  },
   onRegisterError(err) {
     console.error('SW register failed', err);
   },
