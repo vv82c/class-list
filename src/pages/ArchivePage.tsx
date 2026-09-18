@@ -237,8 +237,8 @@ export default function ArchivePage() {
       )}
 
       {selectMode && (
-        <div className="fixed inset-x-0 bottom-16 z-20 mx-auto flex max-w-lg items-center gap-3 px-4">
-          <div className="flex flex-1 items-center gap-3 rounded-xl bg-slate-900 p-2 pl-4 text-white shadow-lg">
+        <div className="fixed bottom-6 left-56 right-0 z-20 flex justify-center px-6">
+          <div className="flex items-center gap-3 rounded-xl bg-slate-900 p-2 pl-4 text-white shadow-lg">
             <span className="text-sm">已选 {selected.size}</span>
             <button
               disabled={!selected.size}

@@ -10,7 +10,7 @@ const links = [
   { to: '/sync', label: '备份', icon: '🔄' },
 ];
 
-/** 宽屏左侧导航：功能入口 + 课程直达 */
+/** 左侧导航：功能入口 + 课程直达 */
 export default function SideNav() {
   const [courses, setCourses] = useState<Course[]>([]);
   useEffect(() => {
@@ -18,7 +18,7 @@ export default function SideNav() {
   }, []);
 
   return (
-    <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col gap-1 border-r border-slate-200 bg-white p-3 lg:flex">
+    <aside className="sticky top-0 flex h-dvh w-56 shrink-0 flex-col gap-1 border-r border-slate-200 bg-white p-3">
       <p className="mb-2 px-2 text-lg font-bold">课堂归档</p>
       {links.map((l) => (
         <NavLink

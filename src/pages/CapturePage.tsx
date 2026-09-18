@@ -44,7 +44,6 @@ function filesFromDataTransfer(dt: DataTransfer): Promise<File[]> {
 }
 
 export default function CapturePage() {
-  const cameraRef = useRef<HTMLInputElement>(null);
   const pickRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement | null>(null);
   const dragDepth = useRef(0);
@@ -181,12 +180,6 @@ export default function CapturePage() {
           📁 导入整个文件夹
         </button>
       </div>
-      <button
-        onClick={() => cameraRef.current?.click()}
-        className="mt-2 w-full rounded-xl border border-slate-200 bg-white py-2 text-sm text-slate-500"
-      >
-        📷 相机拍照（手机上使用）
-      </button>
       <p className="mt-3 text-xs text-slate-400">也可以把照片或整个文件夹直接拖进本页</p>
 
       <input
@@ -210,18 +203,6 @@ export default function CapturePage() {
           }
         }}
         type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          pickFiles(Array.from(e.target.files ?? []).filter(isImage));
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
         multiple
         className="hidden"
         onChange={(e) => {

@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import BottomNav from './components/BottomNav';
 import SideNav from './components/SideNav';
 import SchedulePage from './pages/SchedulePage';
 import CapturePage from './pages/CapturePage';
@@ -10,9 +9,9 @@ import SyncPage from './pages/SyncPage';
 
 export default function App() {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg items-stretch bg-slate-50 text-slate-900 lg:max-w-6xl">
+    <div className="mx-auto flex min-h-dvh w-full max-w-6xl items-stretch bg-slate-50 text-slate-900">
       <SideNav />
-      <div className="min-w-0 flex-1 pb-20 lg:pb-0">
+      <div className="min-w-0 flex-1">
         <Routes>
           <Route path="/" element={<SchedulePage />} />
           <Route path="/capture" element={<CapturePage />} />
@@ -23,7 +22,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-      <BottomNav />
     </div>
   );
 }
