@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getCourses } from '../storage/db';
+import { getCourses, getSettings, saveSettings } from '../storage/db';
+import { describeWeeksShort, teachingWeek } from '../lib/matching';
 import { slotToString, WEEKDAY_NAMES, type Course, type ScheduleSlot } from '../types';
 
 const DAY_START = 8 * 60; // 08:00
@@ -104,6 +105,7 @@ function WeekView({ courses }: { courses: Course[] }) {
                   {b.slot.course.name}
                   <br />
                   {slotToString(b.slot.startMin)}
+                  {describeWeeksShort(b.slot.weeks) && ` · ${describeWeeksShort(b.slot.weeks)}`}
                 </Link>
               ))}
             </div>
@@ -116,11 +118,23 @@ function WeekView({ courses }: { courses: Course[] }) {
 
 export default function SchedulePage() {
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [weekNow, setWeekNow] = useState<number | null>(null);
 
   const reload = () => getCourses().then(setCourses);
   useEffect(() => {
     reload();
+    getSettings().then((s) => {
+      setSemesterStart(s.semesterStart);
+      if (s.semesterStart) setWeekNow(teachingWeek(Date.now(), s.semesterStart));
+    });
   }, []);
+
+  async function onSemesterStartChange(v: string) {
+    setSemesterStart(v || null);
+    await saveSettings({ semesterStart: v || null });
+    setWeekNow(v ? teachingWeek(Date.now(), v) : null);
+  }
 
   return (
     <div className="p-4">
@@ -129,6 +143,25 @@ export default function SchedulePage() {
         <Link to="/course-form" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white">
           ＋ 新课程
         </Link>
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-sm">
+        <span className="text-slate-500">本学期第一周</span>
+        <input
+          type="date"
+          value={semesterStart ?? ''}
+          onChange={(e) => onSemesterStartChange(e.target.value)}
+          className="rounded border border-slate-300 bg-white px-2 py-1"
+        />
+        {weekNow != null && weekNow >= 1 && (
+          <span className="text-slate-400">
+            当前第 <b className="text-slate-700">{weekNow}</b> 教学周
+          </span>
+        )}
+        {!semesterStart && (
+          <span className="text-xs text-slate-400">
+            设置后单双周课程才能自动归档，时间线会显示"第几堂"
+          </span>
+        )}
       </div>
       {courses === null ? (
         <p className="text-sm text-slate-400">加载中…</p>
@@ -158,7 +191,12 @@ export default function SchedulePage() {
                     <span className="font-medium">{c.name}</span>
                     <span className="ml-auto text-xs text-slate-400">
                       {c.slots
-                        .map((s) => `${WEEKDAY_NAMES[s.weekday]} ${slotToString(s.startMin)}`)
+                        .map(
+                          (s) =>
+                            `${WEEKDAY_NAMES[s.weekday]} ${slotToString(s.startMin)}${
+                              describeWeeksShort(s.weeks) ? `(${describeWeeksShort(s.weeks)})` : ''
+                            }`,
+                        )
                         .join('、') || '未设时间'}
                     </span>
                   </Link>

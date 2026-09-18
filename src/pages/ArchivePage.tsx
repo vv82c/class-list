@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
-import { deletePhoto, getCourses, getPhotos, putPhoto } from '../storage/db';
+import { matchCourse, teachingWeek } from '../lib/matching';
+import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
 type Filter = 'all' | 'pending' | 'uncategorized' | 'starred';
@@ -148,6 +149,33 @@ export default function ArchivePage() {
     await reload();
   }
 
+  /** 按当前课表（含单双周/周范围）重算本学期内"自动归档/未分类"照片的归属 */
+  async function reassignAll() {
+    const { semesterStart } = await getSettings();
+    if (
+      !confirm(
+        '将按当前课表（含单双周设置）重新计算照片归属，只影响"自动归档"和"未分类"的照片，手动改过的不动。继续？',
+      )
+    )
+      return;
+    const list = photos ?? [];
+    let changed = 0;
+    for (const p of list) {
+      if (p.capture === 'manual' || p.takenAt == null) continue;
+      // 学期外的照片不参与（避免把往学期照片清成未分类）
+      if (semesterStart && teachingWeek(p.takenAt, semesterStart) < 1) continue;
+      const m = matchCourse(p, courses, semesterStart);
+      const courseId = m?.courseId ?? '';
+      const capture = m ? 'auto' : 'none';
+      if (courseId !== p.courseId || capture !== p.capture) {
+        await putPhoto({ ...p, courseId, capture });
+        changed++;
+      }
+    }
+    await reload();
+    alert(`重新归课完成：${changed} 张照片的归属被更新。`);
+  }
+
   async function deleteSelected() {
     if (!selected.size) return;
     if (!confirm(`删除选中的 ${selected.size} 张照片？此操作不可撤销。`)) return;
@@ -189,6 +217,13 @@ export default function ArchivePage() {
             {label}
           </button>
         ))}
+        <button
+          onClick={reassignAll}
+          className="rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-200"
+          title="按当前课表（含单双周）重算自动归档照片的归属"
+        >
+          重新归课
+        </button>
         <button
           onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
           className="ml-auto shrink-0 rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-200"

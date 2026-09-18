@@ -9,7 +9,7 @@ import {
   type Quad,
 } from '../lib/crop';
 import { enhanceDocumentImage } from '../lib/enhance';
-import { newId, putPhoto, getCourses } from '../storage/db';
+import { newId, putPhoto, getCourses, getSettings } from '../storage/db';
 import { matchCourse } from '../lib/matching';
 import { saveFile } from '../storage/opfs';
 import type { PhotoMeta } from '../types';
@@ -31,7 +31,8 @@ export async function persistPhoto(
   const fileName = `${id}-original.${ext}`;
   const thumbFileName = `${id}-thumb.jpg`;
   const takenAt = await extractExifDateTime(file).catch(() => null);
-  const match = matchCourse({ takenAt }, await getCourses());
+  const [{ semesterStart }, courses] = await Promise.all([getSettings(), getCourses()]);
+  const match = matchCourse({ takenAt }, courses, semesterStart);
   let cropBlob: Blob | null = null;
   let cropFileName: string | undefined;
   if (crop) {

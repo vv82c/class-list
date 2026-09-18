@@ -4,7 +4,7 @@ import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { groupSessions } from '../lib/sessions';
 import { usePhotoUrl } from '../lib/ui';
-import { getCourse, getPhotosByCourse, putPhoto } from '../storage/db';
+import { getCourse, getPhotosByCourse, getSettings, putPhoto } from '../storage/db';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
 function Cell({ photo, onOpen }: { photo: PhotoMeta; onOpen: () => void }) {
@@ -32,6 +32,7 @@ export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [course, setCourse] = useState<Course | undefined>();
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
+  const [semesterStart, setSemesterStart] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [view, setView] = useState<{ photos: PhotoMeta[]; index: number } | null>(null);
   const [recrop, setRecrop] = useState<PhotoMeta | null>(null);
@@ -39,8 +40,10 @@ export default function CourseDetailPage() {
 
   const reload = async () => {
     if (!id) return;
-    setCourse(await getCourse(id));
-    setPhotos(await getPhotosByCourse(id));
+    const [c, ps, s] = await Promise.all([getCourse(id), getPhotosByCourse(id), getSettings()]);
+    setCourse(c);
+    setPhotos(ps);
+    setSemesterStart(s.semesterStart);
     setLoaded(true);
   };
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function CourseDetailPage() {
     );
   }
 
-  const sessions = groupSessions(photos, [course]);
+  const sessions = groupSessions(photos, [course], semesterStart);
 
   return (
     <div className="p-4">

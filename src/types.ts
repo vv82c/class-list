@@ -1,7 +1,15 @@
+/** 时间槽的上课周次：单双周、前/后八周都是它的特例。缺省 = 每周 */
+export interface WeeksSpec {
+  from: number; // 起始教学周（≥1）
+  to: number; // 结束教学周（≥from）
+  step: number; // 1 = 每周连续，2 = 隔周
+}
+
 export interface ScheduleSlot {
   weekday: number; // 0=周日 1-6=周一~周六
   startMin: number; // 当天分钟数，如 10:00 => 600
   endMin: number;
+  weeks?: WeeksSpec; // 缺省 = 每周
 }
 
 export interface Course {

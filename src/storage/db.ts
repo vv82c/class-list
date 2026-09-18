@@ -2,6 +2,10 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Course, PhotoMeta } from '../types';
 import { deleteFile } from './opfs';
 
+export interface AppSettings {
+  semesterStart: string | null; // 学期第一周内任一天，'YYYY-MM-DD'（本地时区）
+}
+
 interface AppDB extends DBSchema {
   courses: {
     key: string;
@@ -13,24 +17,45 @@ interface AppDB extends DBSchema {
     value: PhotoMeta;
     indexes: { 'by-created': number; 'by-course': string };
   };
+  settings: {
+    key: string;
+    value: { key: string; value: AppSettings };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<AppDB>> | null = null;
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<AppDB>('class-list', 2, {
-      upgrade(db) {
-        const courses = db.createObjectStore('courses', { keyPath: 'id' });
-        courses.createIndex('by-created', 'createdAt');
-        const photos = db.createObjectStore('photos', { keyPath: 'id' });
-        photos.createIndex('by-created', 'createdAt');
-        // sparse：courseId 为 ''（未归属）时不建索引项，'' 不是合法的 IDB 索引键
-        photos.createIndex('by-course', 'courseId', { unique: false, sparse: true } as IDBIndexParameters);
+    dbPromise = openDB<AppDB>('class-list', 3, {
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const courses = db.createObjectStore('courses', { keyPath: 'id' });
+          courses.createIndex('by-created', 'createdAt');
+          const photos = db.createObjectStore('photos', { keyPath: 'id' });
+          photos.createIndex('by-created', 'createdAt');
+          // sparse：courseId 为 ''（未归属）时不建索引项，'' 不是合法的 IDB 索引键
+          photos.createIndex('by-course', 'courseId', { unique: false, sparse: true } as IDBIndexParameters);
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore('settings', { keyPath: 'key' });
+        }
       },
     });
   }
   return dbPromise;
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const db = await getDB();
+  const rec = await db.get('settings', 'app');
+  return { semesterStart: rec?.value?.semesterStart ?? null };
+}
+
+export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {
+  const db = await getDB();
+  const cur = await getSettings();
+  await db.put('settings', { key: 'app', value: { ...cur, ...patch } });
 }
 
 export function newId(): string {

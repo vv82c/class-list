@@ -1,9 +1,9 @@
 import JSZip from 'jszip';
-import { getCourses, getPhotos, putCourse, putPhoto } from '../storage/db';
+import { getCourses, getPhotos, getSettings, putCourse, putPhoto, saveSettings, type AppSettings } from '../storage/db';
 import { readFile, saveFile } from '../storage/opfs';
 import type { Course, PhotoMeta } from '../types';
 
-export const BUNDLE_VERSION = 1;
+export const BUNDLE_VERSION = 2;
 
 export interface ExportSummary {
   fileName: string;
@@ -19,6 +19,7 @@ interface Manifest {
   exportedAt: number;
   courses: Course[];
   photos: PhotoMeta[];
+  settings?: AppSettings; // v2 起携带
 }
 
 export type ExportMode = 'full' | 'lite';
@@ -68,6 +69,7 @@ export async function exportBundle(mode: ExportMode): Promise<ExportSummary> {
       ...p,
       backedUpAt: mode === 'full' ? Date.now() : p.backedUpAt ?? null,
     })),
+    settings: await getSettings(),
   };
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
@@ -104,7 +106,7 @@ export async function importBundle(file: Blob): Promise<ImportSummary> {
 
   const manifest = JSON.parse(await manifestFile.async('string')) as Manifest;
   if (manifest.version > BUNDLE_VERSION) throw new Error('备份包版本更新，请升级应用后再导入');
-
+  if (manifest.settings) await saveSettings(manifest.settings);
   const summary: ImportSummary = {
     coursesAdded: 0,
     coursesUpdated: 0,
