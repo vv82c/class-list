@@ -5,6 +5,7 @@ import CapturePage from './pages/CapturePage';
 import ArchivePage from './pages/ArchivePage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import CourseFormPage from './pages/CourseFormPage';
+import SyncPage from './pages/SyncPage';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/" element={<SchedulePage />} />
           <Route path="/capture" element={<CapturePage />} />
           <Route path="/archive" element={<ArchivePage />} />
+          <Route path="/sync" element={<SyncPage />} />
           <Route path="/course-form" element={<CourseFormPage />} />
           <Route path="/course/:id" element={<CourseDetailPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

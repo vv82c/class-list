@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { formatTime, usePhotoUrl } from '../lib/ui';
 import { deletePhoto, getCourses, getPhotos, putPhoto } from '../storage/db';
-import type { Course, PhotoMeta } from '../types';
+import { displayFile, type Course, type PhotoMeta } from '../types';
 
 type Filter = 'all' | 'pending' | 'uncategorized';
 
 function Thumb({ photo }: { photo: PhotoMeta }) {
-  const url = usePhotoUrl(photo.thumbFileName ?? photo.fileName);
+  const url = usePhotoUrl(displayFile(photo));
   return (
     <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-slate-200">
       {url ? (
@@ -78,6 +78,8 @@ export default function ArchivePage() {
   const [photos, setPhotos] = useState<PhotoMeta[] | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const reload = async () => {
     setPhotos(await getPhotos());
@@ -97,11 +99,40 @@ export default function ArchivePage() {
           ? photos.filter((p) => p.capture === 'auto')
           : photos.filter((p) => !p.courseId);
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  async function deleteOne(photo: PhotoMeta) {
+    if (!confirm('删除这张照片？此操作不可撤销。')) return;
+    await deletePhoto(photo);
+    await reload();
+  }
+
+  async function deleteSelected() {
+    if (!selected.size) return;
+    if (!confirm(`删除选中的 ${selected.size} 张照片？此操作不可撤销。`)) return;
+    const targets = (photos ?? []).filter((p) => selected.has(p.id));
+    for (const photo of targets) await deletePhoto(photo);
+    exitSelect();
+    await reload();
+  }
+
   return (
-    <div className="p-4">
+    <div className={`p-4 ${selectMode ? 'pb-24' : ''}`}>
       <h1 className="mb-1 text-xl font-bold">归档</h1>
       <p className="mb-3 text-sm text-slate-500">按拍摄时间自动归课，待确认的请核对</p>
-      <div className="mb-3 flex gap-2 text-sm">
+      <div className="mb-3 flex items-center gap-2 text-sm">
         {(
           [
             ['all', '全部'],
@@ -111,7 +142,10 @@ export default function ArchivePage() {
         ).map(([f, label]) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => {
+              setFilter(f);
+              exitSelect();
+            }}
             className={`rounded-full px-3 py-1 ${
               filter === f
                 ? f === 'pending'
@@ -123,6 +157,12 @@ export default function ArchivePage() {
             {label}
           </button>
         ))}
+        <button
+          onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+          className="ml-auto shrink-0 rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-200"
+        >
+          {selectMode ? '取消' : '多选'}
+        </button>
       </div>
       {shown === null ? (
         <p className="text-sm text-slate-400">加载中…</p>
@@ -132,28 +172,75 @@ export default function ArchivePage() {
         </p>
       ) : (
         <ul className="grid grid-cols-3 gap-2">
-          {shown.map((p) => (
-            <li key={p.id} className="group relative">
-              {filter === 'pending' ? (
-                <PendingCard photo={p} courses={courses} onAction={reload} />
-              ) : (
-                <>
-                  <Thumb photo={p} />
-                  <p className="mt-0.5 text-[10px] leading-tight text-slate-400">
-                    {formatTime(p.takenAt)}
-                  </p>
-                </>
-              )}
-              <button
-                onClick={() => deletePhoto(p).then(reload)}
-                className="absolute right-1 top-1 z-10 hidden h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white group-hover:flex"
-                aria-label="删除"
+          {shown.map((p) => {
+            const isSelected = selected.has(p.id);
+            return (
+              <li
+                key={p.id}
+                onClick={selectMode ? () => toggleSelect(p.id) : undefined}
+                className={`relative ${selectMode ? 'cursor-pointer' : 'group'}`}
               >
-                ✕
-              </button>
-            </li>
-          ))}
+                {filter === 'pending' && !selectMode ? (
+                  <PendingCard photo={p} courses={courses} onAction={reload} />
+                ) : (
+                  <>
+                    <Thumb photo={p} />
+                    <p className="mt-0.5 text-[10px] leading-tight text-slate-400">
+                      {formatTime(p.takenAt)}
+                    </p>
+                  </>
+                )}
+                {selectMode ? (
+                  <span
+                    className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full border-2 text-xs font-bold ${
+                      isSelected
+                        ? 'border-sky-500 bg-sky-500 text-white'
+                        : 'border-white/80 bg-black/40 text-transparent'
+                    }`}
+                    aria-hidden
+                  >
+                    ✓
+                  </span>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteOne(p);
+                    }}
+                    className="absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-sm text-white"
+                    aria-label="删除"
+                  >
+                    ✕
+                  </button>
+                )}
+                {isSelected && (
+                  <span className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-sky-500" />
+                )}
+              </li>
+            );
+          })}
         </ul>
+      )}
+
+      {selectMode && (
+        <div className="fixed inset-x-0 bottom-16 z-20 mx-auto flex max-w-lg items-center gap-3 px-4">
+          <div className="flex flex-1 items-center gap-3 rounded-xl bg-slate-900 p-2 pl-4 text-white shadow-lg">
+            <span className="text-sm">已选 {selected.size}</span>
+            <button
+              disabled={!selected.size}
+              onClick={deleteSelected}
+              className="ml-auto rounded-lg bg-red-500 px-4 py-2 text-sm disabled:opacity-40"
+            >
+              删除
+            </button>
+            <button
+              onClick={() => setSelected(new Set(shown?.map((p) => p.id) ?? []))}
+              className="rounded-lg px-3 py-2 text-sm text-slate-300"
+            >
+              全选
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
