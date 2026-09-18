@@ -82,7 +82,12 @@ export default function Lightbox({ photos, index, courses, onIndex, onClose, onR
         <span className="ml-auto text-slate-400">
           {index + 1} / {photos.length}
         </span>
-        <button className="rounded-lg px-2 py-1 text-slate-300 hover:bg-white/10">关闭 ✕</button>
+        <button
+          onClick={onClose}
+          className="rounded-lg px-2 py-1 text-slate-300 hover:bg-white/10"
+        >
+          关闭 ✕
+        </button>
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center px-2" onClick={(e) => e.stopPropagation()}>
