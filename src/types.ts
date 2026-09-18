@@ -25,6 +25,7 @@ export interface PhotoMeta {
   originalRemoved?: boolean; // 原图已清理（省空间），缩略图/裁剪图仍在
   courseId: string; // '' 表示未归属课程
   capture: 'auto' | 'manual' | 'none'; // 归档方式，M4 起使用
+  starred?: boolean; // 重点标记：复习时按课程 + 只看标星
   note: string;
 }
 

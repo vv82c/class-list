@@ -5,7 +5,7 @@ import { formatTime, usePhotoUrl } from '../lib/ui';
 import { deletePhoto, getCourses, getPhotos, putPhoto } from '../storage/db';
 import { displayFile, type Course, type PhotoMeta } from '../types';
 
-type Filter = 'all' | 'pending' | 'uncategorized';
+type Filter = 'all' | 'pending' | 'uncategorized' | 'starred';
 
 function Thumb({ photo, onOpen }: { photo: PhotoMeta; onOpen?: () => void }) {
   const url = usePhotoUrl(displayFile(photo));
@@ -24,6 +24,11 @@ function Thumb({ photo, onOpen }: { photo: PhotoMeta; onOpen?: () => void }) {
       {photo.cropFileName && (
         <span className="absolute bottom-0.5 left-0.5 rounded bg-black/55 px-1 text-[9px] text-white">
           裁
+        </span>
+      )}
+      {photo.starred && (
+        <span className="absolute left-1 top-1 rounded bg-black/55 px-1 text-[11px] leading-4">
+          ⭐
         </span>
       )}
     </div>
@@ -99,6 +104,7 @@ export default function ArchivePage() {
   }, []);
 
   const pendingCount = photos?.filter((p) => p.capture === 'auto').length ?? 0;
+  const starredCount = photos?.filter((p) => p.starred).length ?? 0;
   const shown =
     photos === null
       ? null
@@ -106,7 +112,9 @@ export default function ArchivePage() {
         ? photos
         : filter === 'pending'
           ? photos.filter((p) => p.capture === 'auto')
-          : photos.filter((p) => !p.courseId);
+          : filter === 'starred'
+            ? photos.filter((p) => p.starred)
+            : photos.filter((p) => !p.courseId);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -125,6 +133,13 @@ export default function ArchivePage() {
   async function deleteOne(photo: PhotoMeta) {
     if (!confirm('删除这张照片？此操作不可撤销。')) return;
     await deletePhoto(photo);
+    await reload();
+  }
+
+  async function toggleStar(photo: PhotoMeta) {
+    await putPhoto({ ...photo, starred: !photo.starred });
+    // 在"重点"过滤下取消标星后这张图会从列表消失，关掉大图避免指向错位
+    if (filter === 'starred' && photo.starred) setViewIndex(null);
     await reload();
   }
 
@@ -147,6 +162,7 @@ export default function ArchivePage() {
             ['all', '全部'],
             ['pending', `待确认${pendingCount ? ` (${pendingCount})` : ''}`],
             ['uncategorized', '未分类'],
+            ['starred', `⭐ 重点${starredCount ? ` (${starredCount})` : ''}`],
           ] as [Filter, string][]
         ).map(([f, label]) => (
           <button
@@ -159,7 +175,9 @@ export default function ArchivePage() {
               filter === f
                 ? f === 'pending'
                   ? 'bg-amber-500 text-white'
-                  : 'bg-slate-900 text-white'
+                  : f === 'starred'
+                    ? 'bg-amber-400 text-slate-900'
+                    : 'bg-slate-900 text-white'
                 : 'bg-white text-slate-500 ring-1 ring-slate-200'
             }`}
           >
@@ -177,7 +195,13 @@ export default function ArchivePage() {
         <p className="text-sm text-slate-400">加载中…</p>
       ) : shown.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
-          {filter === 'pending' ? '没有待确认的照片' : filter === 'uncategorized' ? '没有未分类照片' : '还没有照片，去"拍照"页导入一些吧'}
+          {filter === 'pending'
+            ? '没有待确认的照片'
+            : filter === 'starred'
+              ? '还没有标星照片，打开大图点「☆ 标星」标记重点'
+              : filter === 'uncategorized'
+                ? '没有未分类照片'
+                : '还没有照片，去"拍照"页导入一些吧'}
         </p>
       ) : (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -264,6 +288,7 @@ export default function ArchivePage() {
           courses={courses}
           onIndex={setViewIndex}
           onClose={() => setViewIndex(null)}
+          onToggleStar={toggleStar}
           onRecrop={(p) => {
             setViewIndex(null);
             setRecrop(p);

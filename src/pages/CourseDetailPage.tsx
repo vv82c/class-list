@@ -4,7 +4,7 @@ import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { groupSessions } from '../lib/sessions';
 import { usePhotoUrl } from '../lib/ui';
-import { getCourse, getPhotosByCourse } from '../storage/db';
+import { getCourse, getPhotosByCourse, putPhoto } from '../storage/db';
 import { displayFile, type Course, type PhotoMeta } from '../types';
 
 function Cell({ photo, onOpen }: { photo: PhotoMeta; onOpen: () => void }) {
@@ -12,12 +12,17 @@ function Cell({ photo, onOpen }: { photo: PhotoMeta; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-slate-200 text-left"
+      className="relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-slate-200 text-left"
     >
       {url ? (
         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <span className="flex h-full items-center justify-center text-[10px] text-slate-400">…</span>
+      )}
+      {photo.starred && (
+        <span className="absolute left-1 top-1 rounded bg-black/55 px-1 text-[11px] leading-4">
+          ⭐
+        </span>
       )}
     </button>
   );
@@ -42,6 +47,11 @@ export default function CourseDetailPage() {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function toggleStar(photo: PhotoMeta) {
+    await putPhoto({ ...photo, starred: !photo.starred });
+    await reload();
+  }
 
   if (!loaded) return <p className="p-4 text-sm text-slate-400">加载中…</p>;
 
@@ -118,6 +128,7 @@ export default function CourseDetailPage() {
           courses={[course]}
           onIndex={(i) => setView({ ...view, index: i })}
           onClose={() => setView(null)}
+          onToggleStar={toggleStar}
           onRecrop={(p) => {
             setView(null);
             setRecrop(p);

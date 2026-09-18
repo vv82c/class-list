@@ -8,6 +8,7 @@ import {
   warpQuad,
   type Quad,
 } from '../lib/crop';
+import { enhanceDocumentImage } from '../lib/enhance';
 import { newId, putPhoto, getCourses } from '../storage/db';
 import { matchCourse } from '../lib/matching';
 import { saveFile } from '../storage/opfs';
@@ -34,7 +35,8 @@ export async function persistPhoto(
   let cropBlob: Blob | null = null;
   let cropFileName: string | undefined;
   if (crop) {
-    cropBlob = crop.blob;
+    // 裁剪图做一档自动增强（去投影偏色+锐化），原图永远保留可切回
+    cropBlob = await enhanceDocumentImage(crop.blob);
     cropFileName = `${id}-crop.jpg`;
   }
   const thumbSource = cropBlob ?? file;
@@ -61,12 +63,13 @@ export async function persistPhoto(
   return meta;
 }
 
-/** 对已有照片重新裁剪：覆盖裁剪图并用新裁剪图重建缩略图 */
+/** 对已有照片重新裁剪：覆盖裁剪图（自动增强）并用新裁剪图重建缩略图 */
 export async function updatePhotoCrop(photo: PhotoMeta, blob: Blob, quad: Quad): Promise<void> {
   const cropFileName = photo.cropFileName ?? `${photo.id}-crop.jpg`;
   const thumbFileName = photo.thumbFileName ?? `${photo.id}-thumb.jpg`;
-  await saveFile(cropFileName, blob);
-  const bmp = await createImageBitmap(blob);
+  const enhanced = await enhanceDocumentImage(blob);
+  await saveFile(cropFileName, enhanced);
+  const bmp = await createImageBitmap(enhanced);
   const thumb = await makeThumbnail(bmp, bmp.width, bmp.height);
   bmp.close();
   await saveFile(thumbFileName, thumb);
