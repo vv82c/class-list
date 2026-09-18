@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatTime } from '../lib/ui';
 import { readFile } from '../storage/opfs';
 import { newId } from '../storage/db';
-import { ERASER_RADIUS, hitTest, simplifyPoints, textBoxSize } from '../lib/annotations';
+import { ERASER_RADIUS, hitTest, simplifyPoints, toNormalized, textBoxSize } from '../lib/annotations';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 import AnnotationLayer from './AnnotationLayer';
 
@@ -72,6 +72,8 @@ export default function Lightbox({
   const spaceRef = useRef(false);
   const suppressClickRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [layout, setLayout] = useState<{ boxW: number; boxH: number; imgW: number; imgH: number } | null>(null);
   const onIndexRef = useRef(onIndex);
   onIndexRef.current = onIndex;
   const onSaveRef = useRef(onSaveAnnotations);
@@ -131,6 +133,39 @@ export default function Lightbox({
     const t = setInterval(() => navigate((index + 1) % photos.length), 3000);
     return () => clearInterval(t);
   }, [playing, index, photos.length]);
+
+  // 跟踪容器与图片的实际布局尺寸，标注层必须精确叠在图片矩形上。
+  // 每次渲染后同步测量（带守卫防死循环）；ResizeObserver 兜底窗口缩放等无渲染的尺寸变化
+  const measureLayout = () => {
+    const box = boxRef.current;
+    const img = imgRef.current;
+    if (!box || !img) return;
+    const boxW = box.clientWidth;
+    const boxH = box.clientHeight;
+    const imgW = img.clientWidth;
+    const imgH = img.clientHeight;
+    setLayout((prev) =>
+      prev && prev.boxW === boxW && prev.boxH === boxH && prev.imgW === imgW && prev.imgH === imgH
+        ? prev
+        : { boxW, boxH, imgW, imgH },
+    );
+  };
+  const measureLayoutRef = useRef(measureLayout);
+  measureLayoutRef.current = measureLayout;
+
+  useEffect(() => {
+    measureLayoutRef.current();
+  });
+
+  useEffect(() => {
+    const box = boxRef.current;
+    const img = imgRef.current;
+    if (!box || !img) return;
+    const ro = new ResizeObserver(() => measureLayoutRef.current());
+    ro.observe(box);
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [url, status]);
 
   /** 脏标注先落库再离开当前照片 */
   function persist() {
@@ -251,14 +286,18 @@ export default function Lightbox({
     return () => box.removeEventListener('wheel', onWheel);
   });
 
-  /** 屏幕坐标 → 宽度归一化坐标（y 同为图宽单位），含缩放与平移 */
+  /** 屏幕坐标 → 宽度归一化坐标（y 同为图宽单位），含缩放与平移。基准是图片元素自己的矩形 */
   function toNorm(clientX: number, clientY: number): [number, number] {
-    const rect = boxRef.current!.getBoundingClientRect();
+    const img = imgRef.current!;
+    const rect = img.getBoundingClientRect();
     const layoutW = rect.width / view.zoom;
-    return [
-      clamp(0.5 + (clientX - (rect.left + rect.width / 2) - view.x) / layoutW, 0, 1),
-      clamp(0.5 + (clientY - (rect.top + rect.height / 2) - view.y) / layoutW, 0, 1),
-    ];
+    const aspect = natural ? natural.h / natural.w : 0.75;
+    return toNormalized(
+      clientX - (rect.left + rect.width / 2) - view.x,
+      clientY - (rect.top + rect.height / 2) - view.y,
+      layoutW,
+      aspect,
+    );
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -496,6 +535,7 @@ export default function Lightbox({
         {url ? (
           <>
             <img
+              ref={imgRef}
               src={url}
               alt=""
               draggable={false}
@@ -517,11 +557,15 @@ export default function Lightbox({
                 setNatural({ w: el.naturalWidth, h: el.naturalHeight });
               }}
             />
-            {variant === 'crop' && natural && (editing || anns.length > 0) && (
+            {variant === 'crop' && natural && layout && (editing || anns.length > 0) && (
               <AnnotationLayer
                 annotations={renderAnns}
                 aspect={aspect}
                 transform={`translate(${view.x}px, ${view.y}px) scale(${view.zoom})`}
+                left={(layout.boxW - layout.imgW) / 2}
+                top={(layout.boxH - layout.imgH) / 2}
+                width={layout.imgW}
+                height={layout.imgH}
               />
             )}
           </>

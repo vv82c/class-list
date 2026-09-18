@@ -38,6 +38,23 @@ export function distToSegment(
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
+/**
+ * 像素差 → 宽度归一化坐标（y 同为图宽单位）。
+ * dx/dy 是相对图片布局中心的光标像素差（需先减去平移量）；
+ * y 的中心是 aspect/2 而不是 0.5，夹紧上限是 aspect 而不是 1。
+ */
+export function toNormalized(
+  dx: number,
+  dy: number,
+  layoutW: number,
+  aspect: number,
+): [number, number] {
+  return [
+    clamp(0.5 + dx / layoutW, 0, 1),
+    clamp(aspect / 2 + dy / layoutW, 0, Math.max(aspect, 0.01)),
+  ];
+}
+
 /** 文字框尺寸估算：CJK 记 1 字宽、ASCII 记 0.55 */
 export function textBoxSize(text: string): { w: number; h: number } {
   const units = [...text].reduce(

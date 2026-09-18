@@ -4,24 +4,32 @@ import { TEXT_FONT, TEXT_PAD, textBoxSize } from '../lib/annotations';
 const S = 1000; // 渲染缩放：所有归一化坐标 × 1000 进入 viewBox（y 同为图宽单位）
 
 /**
- * 标注渲染层：与图片等大小的 SVG 覆盖层，跟随图片同款 transform，
+ * 标注渲染层：精确叠放在图片元素矩形上的 SVG 覆盖层，跟随图片同款 transform，
  * 整体 mix-blend multiply——笔迹像墨水一样融进纸面，黑笔压字不糊、荧光笔透字。
  */
 export default function AnnotationLayer({
   annotations,
   aspect,
   transform,
+  left,
+  top,
+  width,
+  height,
 }: {
   annotations: Annotation[];
   aspect: number; // 图片高/宽
   transform?: string; // 与图片元素保持一致的 transform
+  left: number; // 图片矩形在容器内的位置与大小（像素）
+  top: number;
+  width: number;
+  height: number;
 }) {
   const vbH = Math.max(1, Math.round(S * aspect));
   return (
     <svg
       viewBox={`0 0 ${S} ${vbH}`}
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      style={{ mixBlendMode: 'multiply', transform }}
+      className="pointer-events-none absolute"
+      style={{ mixBlendMode: 'multiply', transform, left, top, width, height }}
     >
       {annotations.map((a) => {
         if (a.kind === 'highlighter') {
