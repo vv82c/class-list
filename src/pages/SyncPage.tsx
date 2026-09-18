@@ -40,7 +40,7 @@ export default function SyncPage() {
       setMessage(
         `已生成 ${result.fileName}（${human(result.blob.size)}，含 ${result.photos} 张照片${
           result.skipped ? `，${result.skipped} 个文件读取失败已跳过` : ''
-        }）。浏览器下载后可通过微信/QQ 或数据线传到电脑，在电脑上进本页“导入”。`,
+        }）。请把它存到网盘/移动硬盘等异地位置；恢复数据或搬到其他电脑时，仍在本页「导入」。`,
       );
       await reload();
     } catch (e) {
@@ -76,7 +76,7 @@ export default function SyncPage() {
     if (!cleanable.length) return;
     if (
       !confirm(
-        `将删除 ${cleanable.length} 张照片的“原图”以释放空间，保留裁剪图和缩略图（仍可正常浏览）。\n\n前提：你已经把完整备份包成功传到了电脑。若备份包已失效，取消并重新导出。`,
+        `将删除 ${cleanable.length} 张照片的“原图”以释放空间，保留裁剪图和缩略图（仍可正常浏览）。\n\n前提：你已经导出过完整备份包并把它存到了安全位置。若手头没有有效备份，取消并先导出。`,
       )
     )
       return;
@@ -92,9 +92,9 @@ export default function SyncPage() {
 
   return (
     <div className="p-4">
-      <h1 className="mb-1 text-xl font-bold">同步</h1>
+      <h1 className="mb-1 text-xl font-bold">备份</h1>
       <p className="mb-4 text-sm text-slate-500">
-        数据只存在本机浏览器里，导出备份包即可在另一台设备导入查看
+        数据只存在这台电脑的浏览器里。导出完整备份包并存到网盘/移动硬盘，是数据唯一的异地副本——建议每月一次。
       </p>
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
@@ -163,8 +163,8 @@ export default function SyncPage() {
       )}
       {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <p className="mt-4 text-xs leading-relaxed text-slate-400">
-        说明：完整备份含原图，是唯一的异地副本，建议定期导出；清缓存或换机会清空本机数据。
-        导出后请勿依赖聊天软件里的文件长期保存，收到后尽快导入。
+        说明：完整备份含原图，是数据唯一的异地副本，建议每月导出一次并存到网盘/移动硬盘；
+        清除浏览器站点数据或重装系统会清空本机数据，备份包是唯一的恢复手段。
       </p>
     </div>
   );

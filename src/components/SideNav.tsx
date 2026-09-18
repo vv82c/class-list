@@ -7,7 +7,7 @@ const links = [
   { to: '/', label: '课表', icon: '📅' },
   { to: '/capture', label: '拍照采集', icon: '📷' },
   { to: '/archive', label: '全部照片', icon: '🗂' },
-  { to: '/sync', label: '同步备份', icon: '🔄' },
+  { to: '/sync', label: '备份', icon: '🔄' },
 ];
 
 /** 宽屏左侧导航：功能入口 + 课程直达 */

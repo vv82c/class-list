@@ -1,19 +1,73 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CropEditor, { persistPhoto } from '../components/CropEditor';
 import { detectQuad, warpQuad, type Quad } from '../lib/crop';
 import { Link } from 'react-router-dom';
 
+const isImage = (f: File) => f.type.startsWith('image/');
+
+/** 收集拖入的照片；优先走 entry API 以支持整个文件夹（readEntries 每批最多 100 条，须读到空为止） */
+function filesFromDataTransfer(dt: DataTransfer): Promise<File[]> {
+  const entries = Array.from(dt.items ?? [])
+    .filter((it) => it.kind === 'file')
+    .map((it) => it.webkitGetAsEntry())
+    .filter((e): e is FileSystemEntry => e != null);
+  if (!entries.length) return Promise.resolve(Array.from(dt.files).filter(isImage));
+
+  const files: File[] = [];
+  const walk = (entry: FileSystemEntry): Promise<void> =>
+    new Promise((resolve) => {
+      if (entry.isFile) {
+        (entry as FileSystemFileEntry).file(
+          (f) => {
+            if (isImage(f)) files.push(f);
+            resolve();
+          },
+          () => resolve(),
+        );
+      } else if (entry.isDirectory) {
+        const reader = (entry as FileSystemDirectoryEntry).createReader();
+        const readBatch = () =>
+          reader.readEntries(
+            async (batch) => {
+              if (!batch.length) return resolve();
+              for (const e of batch) await walk(e);
+              readBatch();
+            },
+            () => resolve(),
+          );
+        readBatch();
+      } else {
+        resolve();
+      }
+    });
+  return Promise.all(entries.map(walk)).then(() => files);
+}
+
 export default function CapturePage() {
   const cameraRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
+  const pickRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement | null>(null);
+  const dragDepth = useRef(0);
   const [queue, setQueue] = useState<File[]>([]);
   const [index, setIndex] = useState(0);
   const [message, setMessage] = useState('');
   const [batchBusy, setBatchBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
-  function pickFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setQueue(Array.from(files));
+  // 拖放落在页面其他区域时浏览器默认会直接打开图片顶掉应用，全局拦掉
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault();
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
+  function pickFiles(files: File[]) {
+    if (files.length === 0) return;
+    setQueue(files);
     setIndex(0);
     setMessage('');
   }
@@ -61,21 +115,6 @@ export default function CapturePage() {
     setIndex(0);
   }
 
-  const input = (ref: typeof cameraRef, accept: string, capture?: 'environment') => (
-    <input
-      ref={ref}
-      type="file"
-      accept={accept}
-      capture={capture}
-      multiple
-      className="hidden"
-      onChange={(e) => {
-        pickFiles(e.target.files);
-        e.target.value = '';
-      }}
-    />
-  );
-
   if (queue.length > 0) {
     return (
       <div className="p-4">
@@ -99,27 +138,104 @@ export default function CapturePage() {
   }
 
   return (
-    <div className="p-4">
-      <h1 className="mb-1 text-xl font-bold">拍照</h1>
+    <div
+      className="p-4"
+      onDragEnter={(e) => {
+        e.preventDefault();
+        dragDepth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDragLeave={() => {
+        dragDepth.current -= 1;
+        if (dragDepth.current <= 0) {
+          dragDepth.current = 0;
+          setDragging(false);
+        }
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDragging(false);
+        const files = await filesFromDataTransfer(e.dataTransfer);
+        if (files.length) pickFiles(files);
+        else setMessage('拖入的内容里没有可导入的照片（只认图片文件）');
+      }}
+    >
+      <h1 className="mb-1 text-xl font-bold">拍照采集</h1>
       <p className="mb-4 text-sm text-slate-500">
-        导入后进入裁剪：自动检测 PPT/黑板边缘，可拖角点微调；按 EXIF 时间入库（M4 起自动归课）
+        手机拍的照片拷到电脑后在这里导入：按 EXIF 拍摄时间自动归课，自动框边后可拖角微调或用「整体收缩 /
+        放大」兜底。注意微信以「图片」方式发送会剥掉拍摄时间，请用数据线或「文件」方式传。
       </p>
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <button
-          onClick={() => cameraRef.current?.click()}
-          className="flex-1 rounded-xl bg-slate-900 py-4 text-white"
+          onClick={() => pickRef.current?.click()}
+          className="rounded-xl bg-slate-900 py-4 text-white"
         >
-          📷 相机拍照
+          🖼 选择照片
         </button>
         <button
-          onClick={() => galleryRef.current?.click()}
-          className="flex-1 rounded-xl border border-slate-300 bg-white py-4"
+          onClick={() => folderRef.current?.click()}
+          className="rounded-xl border border-slate-300 bg-white py-4"
         >
-          🖼 从相册导入
+          📁 导入整个文件夹
         </button>
       </div>
-      {input(cameraRef, 'image/*', 'environment')}
-      {input(galleryRef, 'image/*')}
+      <button
+        onClick={() => cameraRef.current?.click()}
+        className="mt-2 w-full rounded-xl border border-slate-200 bg-white py-2 text-sm text-slate-500"
+      >
+        📷 相机拍照（手机上使用）
+      </button>
+      <p className="mt-3 text-xs text-slate-400">也可以把照片或整个文件夹直接拖进本页</p>
+
+      <input
+        ref={pickRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          pickFiles(Array.from(e.target.files ?? []).filter(isImage));
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={(el) => {
+          folderRef.current = el;
+          // React 不透传 webkitdirectory，手动补上（文件夹导入需要）
+          if (el) {
+            el.setAttribute('webkitdirectory', '');
+            el.setAttribute('directory', '');
+          }
+        }}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          pickFiles(Array.from(e.target.files ?? []).filter(isImage));
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          pickFiles(Array.from(e.target.files ?? []).filter(isImage));
+          e.target.value = '';
+        }}
+      />
+      {dragging && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-sky-600/20">
+          <p className="rounded-xl bg-white px-6 py-4 text-lg font-semibold text-sky-700 shadow-lg">
+            松开导入照片
+          </p>
+        </div>
+      )}
       {message && (
         <p className="mt-4 text-sm text-emerald-600">
           {message}

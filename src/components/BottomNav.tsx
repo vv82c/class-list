@@ -4,7 +4,7 @@ const tabs = [
   { to: '/', label: '课表', icon: '📅' },
   { to: '/capture', label: '拍照', icon: '📷' },
   { to: '/archive', label: '归档', icon: '🗂' },
-  { to: '/sync', label: '同步', icon: '🔄' },
+  { to: '/sync', label: '备份', icon: '🔄' },
 ];
 
 export default function BottomNav() {
