@@ -3,6 +3,7 @@ import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
 import { matchCourse, teachingWeek } from '../lib/matching';
+import { sessionNumberFor } from '../lib/sessions';
 import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
@@ -25,6 +26,11 @@ function Thumb({ photo, onOpen }: { photo: PhotoMeta; onOpen?: () => void }) {
       {photo.cropFileName && (
         <span className="absolute bottom-0.5 left-0.5 rounded bg-black/55 px-1 text-[9px] text-white">
           裁
+        </span>
+      )}
+      {!!photo.annotations?.length && (
+        <span className="absolute bottom-0.5 right-0.5 rounded bg-black/55 px-1 text-[9px] text-white">
+          注
         </span>
       )}
       {photo.starred && (
@@ -90,6 +96,8 @@ function PendingCard({
 export default function ArchivePage() {
   const [photos, setPhotos] = useState<PhotoMeta[] | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [weekFilter, setWeekFilter] = useState<'all' | number>('all');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -97,8 +105,10 @@ export default function ArchivePage() {
   const [recrop, setRecrop] = useState<PhotoMeta | null>(null);
 
   const reload = async () => {
-    setPhotos(await getPhotos());
-    setCourses(await getCourses());
+    const [ps, cs, s] = await Promise.all([getPhotos(), getCourses(), getSettings()]);
+    setPhotos(ps);
+    setCourses(cs);
+    setSemesterStart(s.semesterStart);
   };
   useEffect(() => {
     reload();
@@ -106,16 +116,30 @@ export default function ArchivePage() {
 
   const pendingCount = photos?.filter((p) => p.capture === 'auto').length ?? 0;
   const starredCount = photos?.filter((p) => p.starred).length ?? 0;
+  const weekOptions =
+    photos && semesterStart
+      ? [
+          ...new Set(
+            photos
+              .map((p) => (p.takenAt != null ? teachingWeek(p.takenAt, semesterStart) : null))
+              .filter((w): w is number => w != null && w >= 1),
+          ),
+        ].sort((a, b) => a - b)
+      : [];
+  const inWeek = (p: PhotoMeta) =>
+    weekFilter === 'all' ||
+    (semesterStart !== null && p.takenAt != null && teachingWeek(p.takenAt, semesterStart) === weekFilter);
   const shown =
     photos === null
       ? null
-      : filter === 'all'
-        ? photos
-        : filter === 'pending'
-          ? photos.filter((p) => p.capture === 'auto')
-          : filter === 'starred'
-            ? photos.filter((p) => p.starred)
-            : photos.filter((p) => !p.courseId);
+      : (filter === 'all'
+          ? photos
+          : filter === 'pending'
+            ? photos.filter((p) => p.capture === 'auto')
+            : filter === 'starred'
+              ? photos.filter((p) => p.starred)
+              : photos.filter((p) => !p.courseId)
+        ).filter(inWeek);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -134,6 +158,15 @@ export default function ArchivePage() {
   async function deleteOne(photo: PhotoMeta) {
     if (!confirm('删除这张照片？此操作不可撤销。')) return;
     await deletePhoto(photo);
+    await reload();
+  }
+
+  async function confirmAllPending() {
+    if (!pendingCount) return;
+    if (!confirm(`确认全部 ${pendingCount} 张待确认照片的归属？`)) return;
+    for (const p of photos ?? []) {
+      if (p.capture === 'auto') await putPhoto({ ...p, capture: 'manual' });
+    }
     await reload();
   }
 
@@ -185,6 +218,11 @@ export default function ArchivePage() {
     await reload();
   }
 
+  const currentPhoto = viewIndex != null && shown ? shown[viewIndex] : undefined;
+  const sessionNumber = currentPhoto
+    ? sessionNumberFor(currentPhoto, courses.find((c) => c.id === currentPhoto.courseId), semesterStart)
+    : null;
+
   return (
     <div className={`p-4 ${selectMode ? 'pb-24' : ''}`}>
       <h1 className="mb-1 text-xl font-bold">归档</h1>
@@ -224,6 +262,31 @@ export default function ArchivePage() {
         >
           重新归课
         </button>
+        {semesterStart && weekOptions.length > 0 && (
+          <select
+            value={String(weekFilter)}
+            onChange={(e) => {
+              setWeekFilter(e.target.value === 'all' ? 'all' : Number(e.target.value));
+              exitSelect();
+            }}
+            className="rounded-full bg-white px-2 py-1 text-slate-500 ring-1 ring-slate-200"
+          >
+            <option value="all">全部周次</option>
+            {weekOptions.map((w) => (
+              <option key={w} value={w}>
+                第{w}周
+              </option>
+            ))}
+          </select>
+        )}
+        {filter === 'pending' && pendingCount > 0 && (
+          <button
+            onClick={confirmAllPending}
+            className="rounded-full bg-emerald-500 px-3 py-1 text-white"
+          >
+            ✓ 全部确认
+          </button>
+        )}
         <button
           onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
           className="ml-auto shrink-0 rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-200"
@@ -330,6 +393,7 @@ export default function ArchivePage() {
           onClose={() => setViewIndex(null)}
           onToggleStar={toggleStar}
           onSaveAnnotations={saveAnnotations}
+          sessionNumber={sessionNumber}
           onRecrop={(p) => {
             setViewIndex(null);
             setRecrop(p);

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { formatTime } from '../lib/ui';
 import { readFile } from '../storage/opfs';
 import { newId } from '../storage/db';
+import { downloadBlob } from '../lib/backup';
+import { canvasToBlob } from '../lib/crop';
 import { ERASER_RADIUS, hitTest, simplifyPoints, toNormalized, textBoxSize } from '../lib/annotations';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 import AnnotationLayer from './AnnotationLayer';
@@ -31,6 +33,7 @@ interface Props {
   onRecrop: (photo: PhotoMeta) => void;
   onToggleStar: (photo: PhotoMeta) => void;
   onSaveAnnotations: (photo: PhotoMeta, annotations: Annotation[]) => void;
+  sessionNumber?: number | null; // 该照片所在课堂的「第几堂」
 }
 
 /** 全屏大图复习：← → 翻页、空格连播、滚轮缩放、双击放大/复位；✏️ 进入标注模式 */
@@ -43,6 +46,7 @@ export default function Lightbox({
   onRecrop,
   onToggleStar,
   onSaveAnnotations,
+  sessionNumber,
 }: Props) {
   const photo = photos[index];
   const [variant, setVariant] = useState<'crop' | 'original'>('crop');
@@ -73,6 +77,7 @@ export default function Lightbox({
   const suppressClickRef = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<{ boxW: number; boxH: number; imgW: number; imgH: number } | null>(null);
   const onIndexRef = useRef(onIndex);
   onIndexRef.current = onIndex;
@@ -481,6 +486,43 @@ export default function Lightbox({
     markDirty();
   }
 
+  /** 导出当前裁剪图 + 标注层合成的一张图（发给同学 / 贴笔记） */
+  async function exportAnnotated() {
+    if (!photo?.cropFileName) return;
+    const file = await readFile(photo.cropFileName);
+    if (!file) return;
+    const bmp = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bmp, 0, 0);
+    bmp.close();
+    const svgEl = rootRef.current?.querySelector('svg');
+    if (svgEl) {
+      const clone = svgEl.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', String(canvas.width));
+      clone.setAttribute('height', String(canvas.height));
+      clone.removeAttribute('style'); // 去掉 transform 与 blend，按普通图绘制
+      clone.removeAttribute('class');
+      const svgBlob = new Blob([new XMLSerializer().serializeToString(clone)], {
+        type: 'image/svg+xml;charset=utf-8',
+      });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const svgImg = new Image();
+      await new Promise((res, rej) => {
+        svgImg.onload = res;
+        svgImg.onerror = rej;
+        svgImg.src = svgUrl;
+      });
+      ctx.drawImage(svgImg, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(svgUrl);
+    }
+    const out = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+    downloadBlob(out, `标注-${photo.cropFileName.replace(/-crop\.jpg$/, '')}.jpg`);
+  }
+
   if (!photo) return null;
   const course = courses.find((c) => c.id === photo.courseId);
   const canOriginal = !photo.originalRemoved && !!photo.fileName;
@@ -488,7 +530,7 @@ export default function Lightbox({
   const renderAnns = live ? [...anns, live] : anns;
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-black/95" onClick={requestClose}>
+    <div ref={rootRef} className="fixed inset-0 z-30 flex flex-col bg-black/95" onClick={requestClose}>
       <div
         className="flex items-center gap-3 px-4 py-3 text-sm text-slate-200"
         onClick={(e) => e.stopPropagation()}
@@ -497,6 +539,11 @@ export default function Lightbox({
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: course.color }} />
             {course.name}
+          </span>
+        )}
+        {sessionNumber != null && (
+          <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-slate-200">
+            第{sessionNumber}堂
           </span>
         )}
         <span className="text-slate-400">{formatTime(photo.takenAt)}</span>
@@ -684,6 +731,15 @@ export default function Lightbox({
               className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white"
             >
               重新裁剪
+            </button>
+          )}
+          {photo.cropFileName && status === 'ready' && (
+            <button
+              onClick={exportAnnotated}
+              className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white"
+              title="导出当前裁剪图（含标注）"
+            >
+              ⬇ 导出
             </button>
           )}
           <button

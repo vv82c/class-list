@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
+import { teachingWeek } from '../lib/matching';
 import { groupSessions } from '../lib/sessions';
 import { usePhotoUrl } from '../lib/ui';
 import { getCourse, getPhotosByCourse, getSettings, putPhoto } from '../storage/db';
@@ -24,6 +25,11 @@ function Cell({ photo, onOpen }: { photo: PhotoMeta; onOpen: () => void }) {
           ⭐
         </span>
       )}
+      {!!photo.annotations?.length && (
+        <span className="absolute bottom-0.5 right-0.5 rounded bg-black/55 px-1 text-[9px] leading-4 text-white">
+          注
+        </span>
+      )}
     </button>
   );
 }
@@ -33,8 +39,9 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<Course | undefined>();
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
   const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [weekFilter, setWeekFilter] = useState<'all' | number>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<{ photos: PhotoMeta[]; index: number } | null>(null);
+  const [view, setView] = useState<{ photos: PhotoMeta[]; index: number; number: number | null } | null>(null);
   const [recrop, setRecrop] = useState<PhotoMeta | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -71,7 +78,28 @@ export default function CourseDetailPage() {
     );
   }
 
-  const sessions = groupSessions(photos, [course], semesterStart);
+  // 复习进度：记住这门课上次看过的照片（仅标记，不自动跳转）
+  const lastViewedId = course ? localStorage.getItem(`classlist:lastview:${course.id}`) : null;
+  function openPhoto(sessionPhotos: PhotoMeta[], index: number, number: number | null) {
+    localStorage.setItem(`classlist:lastview:${course?.id ?? ''}`, sessionPhotos[index].id);
+    setView({ photos: sessionPhotos, index, number });
+  }
+
+  const weekOptions = semesterStart
+    ? [
+        ...new Set(
+          photos
+            .map((p) => (p.takenAt != null ? teachingWeek(p.takenAt, semesterStart) : null))
+            .filter((w): w is number => w != null && w >= 1),
+        ),
+      ].sort((a, b) => a - b)
+    : [];
+  const shownPhotos =
+    weekFilter === 'all'
+      ? photos
+      : photos.filter((p) => p.takenAt != null && teachingWeek(p.takenAt, semesterStart!) === weekFilter);
+  const sessions = groupSessions(shownPhotos, [course], semesterStart);
+  const lastSessionKey = lastViewedId ? sessions.find((s) => s.photos.some((p) => p.id === lastViewedId))?.key : null;
 
   return (
     <div className="p-4">
@@ -79,6 +107,20 @@ export default function CourseDetailPage() {
         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: course.color }} />
         <h1 className="text-xl font-bold">{course.name}</h1>
         <span className="ml-auto text-sm text-slate-400">{photos.length} 张 · {sessions.length} 堂课</span>
+        {weekOptions.length > 0 && (
+          <select
+            value={String(weekFilter)}
+            onChange={(e) => setWeekFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="rounded border border-slate-300 bg-white px-1.5 py-1 text-sm text-slate-600"
+          >
+            <option value="all">全部周次</option>
+            {weekOptions.map((w) => (
+              <option key={w} value={w}>
+                第{w}周
+              </option>
+            ))}
+          </select>
+        )}
         <Link
           to={`/course-form?course=${course.id}`}
           className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-600"
@@ -109,8 +151,13 @@ export default function CourseDetailPage() {
                   className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
                 >
                   <span className="text-sm font-medium">{s.title}</span>
-                  <span className="text-xs text-slate-400">{s.count} 张</span>
-                  <span className="ml-auto text-xs text-slate-400">{isOpen ? '收起' : '展开'}</span>
+                  {lastSessionKey === s.key && (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-700">
+                      上次看到
+                    </span>
+                  )}
+                  <span className="ml-auto text-xs text-slate-400">{s.count} 张</span>
+                  <span className="text-xs text-slate-400">{isOpen ? '收起' : '展开'}</span>
                 </button>
                 {isOpen && (
                   <div className="grid grid-cols-3 gap-2 p-3 pt-0 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">
@@ -118,7 +165,7 @@ export default function CourseDetailPage() {
                       <Cell
                         key={p.id}
                         photo={p}
-                        onOpen={() => setView({ photos: s.photos, index: i })}
+                        onOpen={() => openPhoto(s.photos, i, s.number)}
                       />
                     ))}
                   </div>
@@ -134,6 +181,7 @@ export default function CourseDetailPage() {
           photos={view.photos}
           index={view.index}
           courses={[course]}
+          sessionNumber={view.number}
           onIndex={(i) => setView({ ...view, index: i })}
           onClose={() => setView(null)}
           onToggleStar={toggleStar}

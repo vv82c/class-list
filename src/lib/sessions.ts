@@ -53,6 +53,25 @@ function slotMatchesAt(slot: ScheduleSlot, at: number): boolean {
 }
 
 /**
+ * 单张照片的「第几堂」；照片不在课程、无学期配置或不排课时返回 null。
+ * （与 groupSessions 的堂数口径一致）
+ */
+export function sessionNumberFor(
+  photo: PhotoMeta,
+  course: Course | undefined,
+  semesterStart?: string | null,
+): number | null {
+  if (!course || !semesterStart || photo.takenAt == null) return null;
+  const slot = course.slots.find((s) => slotMatchesAt(s, photo.takenAt!));
+  if (!slot) return null;
+  const target = dayKey(photo.takenAt);
+  for (const o of courseOccurrences(course, semesterStart)) {
+    if (o.dayKey === target && o.slotStartMin === slot.startMin) return o.number;
+  }
+  return null;
+}
+
+/**
  * 把照片按"哪一节课"分组：优先用拍摄时间命中的课程时间槽（含日期），
  * 命不中则退化为按拍摄日期分组。semesterStart 提供时推导"第几堂"
  * （按学期时间槽顺序跨槽连续编号；补课等不在课表上的日期不编号）。

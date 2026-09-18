@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupSessions } from './sessions';
+import { groupSessions, sessionNumberFor } from './sessions';
 import type { Course, PhotoMeta } from '../types';
 
 const SEMESTER_START = '2026-08-31'; // 周一，第1周 = 08-31 ~ 09-06
@@ -75,4 +75,12 @@ test('未设学期起点：退化为纯日期分组，不编号', () => {
 
 test('组排序：最新课堂在前', () => {
   assert.equal(groups[0].title.includes('09-18'), true);
+});
+
+test('sessionNumberFor：单张照片查堂数（含补课返回 null）', () => {
+  assert.equal(sessionNumberFor(photos[0], math, SEMESTER_START), 1); // 09-02 周三
+  assert.equal(sessionNumberFor(photos[1], math, SEMESTER_START), 2); // 09-04 周五单周
+  assert.equal(sessionNumberFor(photos[4], math, SEMESTER_START), 5); // 09-18 周五单周
+  assert.equal(sessionNumberFor(photos[5], math, SEMESTER_START), null); // 09-11 双周周五，无排课
+  assert.equal(sessionNumberFor(photos[0], undefined, SEMESTER_START), null); // 课程未传/不属于
 });
