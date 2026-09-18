@@ -1,6 +1,6 @@
-# 课堂归档 PWA — 交接文档
+# 课堂归档 — 交接文档
 
-> 面向接手这个项目的人。写于 2026-09-18。配套阅读：`PLAN.md`（带勾选的活计划，含每个里程碑的验收标准与实施备注）。
+> 面向接手这个项目的人。写于 2026-09-18，随阶段推进持续更新。对外介绍见 `README.md`；配套阅读：`PLAN.md`（带勾选的活计划，含每个里程碑的验收标准与实施备注）。
 
 ## 1. 这是什么
 
@@ -12,7 +12,7 @@
 - 仓库：`https://github.com/vv82c/class-list`（公开），源码在 `main` 分支，站点内容在 `gh-pages` 分支
 - 形态：**桌面网页工具**（电脑浏览器固定用一个，Chrome/Edge 二选一）；SW 离线缓存保留，GitHub Pages 在国内偶尔抽风时也能离线打开
 
-真实使用循环：**教室用手机拍（离线也行）→ 回宿舍电脑上看**。这个循环是全部取舍的依据。
+真实使用循环：**教室用手机拍 → 回宿舍电脑上看**。这个循环是全部取舍的依据。
 
 > **2026-09-18 定案：PC-first 转向** —— 手机只是"拍照 + 加时间戳"的工具，归档与阅读全部在电脑完成。照片真源 = 电脑浏览器沙箱；**手机端 UI 已从代码砍除**（BottomNav、相机入口删除，布局固定桌面侧边导航）；服务器同步 + 备案路线取消。详见 PLAN.md「阶段3」与「跨设备数据方案」。
 
@@ -20,7 +20,7 @@
 
 ```bash
 npm install
-npm run dev        # vite --host，手机连同一路由访问 http://<局域网IP>:5173
+npm run dev        # vite --host，本机/局域网访问 http://<IP>:5173
 npm test           # node --import tsx --test，43 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
@@ -128,8 +128,8 @@ PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入�
 
 ### P1：PC-first 待验证清单（需要用户配合）
 
-1. **EXIF 经传输保留验证（新链路的第一个假设）**：手机拍一张 → 按日常方式传到电脑 → 电脑端导入 → 确认自动归课命中。微信以"图片"方式发送会压缩剥 EXIF；用数据线、LocalSend 或微信"文件"方式
-2. **每月备份纪律**：同步页导出完整 zip → 网盘/移动硬盘（唯一副本在浏览器沙箱）
+1. ~~EXIF 经传输保留验证~~ ✅ 基本验证：真实课堂照片（大学美育 09-18 15:21）经实际传输导入后时间正确、自动归课命中。新学期第一课建议再顺手确认一次
+2. **每月备份纪律**：备份页导出完整 zip → 网盘/移动硬盘（唯一副本在浏览器沙箱）
 3. 固定用一个电脑浏览器打开使用（Chrome/Edge 二选一，两边的沙箱互不相通）
 
 ### P2：小遗留
@@ -145,7 +145,7 @@ PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入�
 1. **`@techstark/opencv-js` 是 UMD**：Vite 下 `await import()` 拿到的 `default` 是 Emscripten 就绪 Promise，**必须再 await 一次**才是带 `Mat` 的实例；`window.cv` 那条路拿不到。它产物是 15MB 单 JS（WASM 内嵌 base64），已做懒加载 + SW 运行时缓存（`globIgnores` 排除出预缓存，否则构建失败）。
 2. **EXIF 解析**：JPEG APP1 布局是 `FF E1 | len(2B) | "Exif"(4B) | 00 00 | TIFF`，TIFF 头在段起始 **+12**；`Exif\0\0` 是 6 字节。相机时间是**本地时区**，不能用 `Date.parse`（无时区串按 UTC）。M1 时没带 EXIF 的测试图，这个 bug 潜伏到 M4 才暴露——**教训：解析类代码必须先造二进制 fixture**。
 3. **IndexedDB 索引不接受空字符串外的非法键**；`by-course` 索引用 `sparse: true`，TS 的 `IDBIndexParameters` 缺该字段需断言。
-4. **PWA 更新要重启两次**：SW 后台静默换新，第二次启动才是新版。用户报"没有同步页"多半是这个。
+4. **PWA 更新要重启两次**：SW 后台静默换新，第二次启动才是新版。用户报"没有备份页/新功能不见了"多半是这个。
 5. **GitHub Pages 不支持 SPA rewrite** → 用 HashRouter + `base: './'` + manifest `start_url: './'`。
 6. **gh token 无 `workflow` scope** → 不能推 `.github/workflows/`，故改用 gh-pages 分支发布（备用 workflow 文件在 `.deploy-backup/`，已 gitignore）。
 7. **Qoder CN 内置浏览器遇到原生 `confirm()` 或下载会整个标签页卡死**，`handle_dialog` 也超时；只能人工作别关掉，或远程点掉。**验证涉及确认弹窗的功能时，改用直接调用被测函数**（本项目阶段1/触屏删除就是这么"漏测"的——逻辑本身没问题，但 UI 层弹窗没自动化验证过）。

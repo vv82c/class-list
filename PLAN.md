@@ -1,6 +1,6 @@
 # 课堂照片归档 App — 施工计划
 
-> 每完成一项任务，把对应的 `[ ]` 改成 `[x]`；里程碑全部完成后再勾选里程碑标题。
+> **文档导读（2026-09-19）**：M1~M6 是首日冲刺的历史记录（勾选与验收保留原样）；当前工作以「阶段1~7」分节推进，阶段记录即变更日志。对外介绍见 README.md，架构/踩坑/待办速览见 HANDOFF.md。
 
 ## 产品定位（2026-09-18 转向 PC-first）
 
@@ -9,20 +9,25 @@
 
 MVP 明确**不做**：OCR 转文字笔记、账号系统、教务系统自动导入、HEIC 兼容（用户为安卓，iPhone 暂不考虑）、**手机端功能迭代与服务器同步（2026-09-18 起砍掉，见「跨设备数据方案」）**。
 
-## 技术选型（2026-09-18 对照开源标杆项目修订）
+## 技术选型（2026-09-18 定，2026-09-19 对齐现状）
 
-- Vite + React + TypeScript，PWA（vite-plugin-pwa，可加主屏幕、离线可用）
-- 图片文件存 OPFS，元数据存 IndexedDB（idb 封装）
-- **缩略图管线**：导入时用 Canvas 把原图缩放至最长边 ~512px 另存一份，列表/照片墙只读缩略图（防止全尺寸图解码拖垮手机滚动）
-- **裁剪检测**：优先 `@techstark/opencv-js`（WASM 版，含 SIMD 优化）做文档边缘检测，失败时回退手动四点选区；透视校正后按四边形实测边长还原宽高比（借鉴 Smart-Note-Scanner，MIT），中间留 `DocumentDetector` 抽象接口
-- **OCR（仅 M7 搜索索引）**：Tesseract.js 中英文识别，结果只入搜索索引不给人读——识别错误只影响召回，可接受（classnotes-album 验证过此定位）
-- UI：Tailwind CSS
+- Vite + React 18 + TypeScript + Tailwind CSS v4，桌面优先网页应用（Chrome/Edge，数据按浏览器隔离）
+- vite-plugin-pwa 仅保留 SW 离线缓存（GitHub Pages 国内访问不稳时可离线打开）；手机端 UI 已砍除，不再谈"加主屏幕"
+- 存储：图片文件存 OPFS，元数据存 IndexedDB（idb 封装，schema v3：courses / photos / settings）
+- **缩略图管线**：导入时 Canvas 缩至最长边 ~512px 另存，列表/照片墙只读缩略图
+- **裁剪与增强**：@techstark/opencv-js（WASM，懒加载 + SW 运行时缓存）做边缘检测与透视校正，失败回退手动四点 + 整体收缩/放大兜底；裁剪图入库时自动增强（纯 JS：自动色阶去投影偏色 + USM 锐化）
+- **复习标注**：SVG 矢量层（multiply 混合透字），随图片 transform 同步，可导出带标注合成图
+- **单双周与堂数**：settings.semesterStart 推教学周序号，ScheduleSlot.weeks（{from,to,step}）做周次过滤，「第几堂」按学期时间槽跨槽连续推导
+- **备份**：zip（JSZip，STORE）全量导出/导入合并，v2 起携带 settings
+- OCR（规划中，M7）：Tesseract.js 本地识别，结果只入搜索索引不给人读——识别错误只影响召回，可接受
 
-## 数据模型
+## 数据模型（2026-09-19 对齐现状）
 
-- `Course`：id、课程名、颜色、时间槽列表（星期几 + 起止节次/时间）
-- `PhotoNote`：id、原图句柄、缩略图句柄（~512px）、裁剪图句柄、四角坐标、拍摄时间（EXIF）、归属课程 id、归属方式（auto/manual/none）、备注、OCR 索引文本（M7 起）
-- `ScheduleSlot`：星期 + 开始/结束时间，归属于某 Course
+- `Course`：id、名称、颜色、`slots: ScheduleSlot[]`、createdAt
+- `ScheduleSlot`：weekday、startMin、endMin、`weeks?`（周次范围 `{from,to,step}`——单周/双周/前八周/后八周均为特例，缺省每周）
+- `PhotoMeta`：id、fileName（原图）、thumbFileName（~512px 缩略图）、cropFileName（透视校正+增强图）、quad（四角）、takenAt（EXIF 时间）、courseId（''=未归属）、capture（auto/manual/none）、starred（标星）、annotations（矢量标注层，重新裁剪清空）、backedUpAt（已备份时间）、originalRemoved（原图已清理）、note
+- `AppSettings`（settings 表）：semesterStart（学期第一周任一天）——教学周序号与「第几堂」的推导锚点
+- IDB `class-list` schema v3：courses / photos / settings 三表
 
 ---
 
@@ -30,7 +35,7 @@ MVP 明确**不做**：OCR 转文字笔记、账号系统、教务系统自动�
 
 - [x] Vite + React + TS 项目初始化，配置 Tailwind、路由、PWA manifest
 - [x] IndexedDB 层（idb）：courses / photos 两张表的 CRUD 封装
-- [x] OPFS 图片存储封装：save / read / delete，文件名与 PhotoNote 关联
+- [x] OPFS 图片存储封装：save / read / delete，文件名与 PhotoMeta 关联
 - [x] EXIF 拍摄时间提取工具函数
 - [x] 应用骨架页面：课表页 / 拍照页 / 归档页 / 课程详情页（空壳 + 导航）
 - [x] **验收**：`npm run dev` 起得来，手机访问局域网地址能看到四个页面并能切换，控制台无报错
@@ -81,7 +86,7 @@ MVP 明确**不做**：OCR 转文字笔记、账号系统、教务系统自动�
 - [x] 另一端导入：合并去重 ✅ 2026-09-18：按 id 去重、本地为准；已验证导出→清空→导入字节一致、重复导入全部跳过
 - [x] 附加：清理已备份原图（保留裁剪图/缩略图）+ 同步页存储占用统计
 - [x] 修复：归档页删除按钮原为 hover 显示，触屏不可见 → 改为常驻，并新增多选批量删除
-- [x] PWA 离线缓存验证、真机添加到主屏幕（SW 已注册激活；主屏幕添加待真机确认）
+- [x] PWA 离线缓存验证、真机添加到主屏幕（SW 已注册激活；主屏幕添加待真机确认）→ 阶段3 砍除手机端后，主屏幕相关随之作废
 - [x] 部署 ✅ 2026-09-18：**https://vv82c.github.io/class-list/**（GitHub Pages，gh-pages 分支 + gh-pages CLI 发布，无需 Actions；HashRouter + base './' 适配子路径；推 main 后需手动跑 `npm run build && npx gh-pages -d dist` 发布）
 - [ ] ~~**验收**：手机上整理好的数据，导出 → 电脑导入后完整可见~~ → PC-first 转向后由阶段3"电脑导入真实验收"取代（2026-09-18）
 
@@ -180,7 +185,7 @@ MVP 明确**不做**：OCR 转文字笔记、账号系统、教务系统自动�
 
 ## M7：OCR 搜索索引（M6 之后按需启动）
 
-- [ ] Tesseract.js 接入：照片入库后空闲时后台识别（中英文），结果存入 PhotoNote 索引字段
+- [ ] Tesseract.js 接入：照片入库后空闲时后台识别（中英文），结果存入 PhotoMeta 搜索索引字段
 - [ ] 全局搜索框：关键词命中板书/PPT 文字，按课程过滤结果
 - [ ] **验收**：输入"第三章"之类的关键词，能找到含该字样的课堂照片（允许 OCR 有错字，命中即可）
 
