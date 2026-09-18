@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # vite --host，手机连同一路由访问 http://<局域网IP>:5173
-npm test           # node --import tsx --test，26 个 lib 层单测
+npm test           # node --import tsx --test，42 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
 # 发布（需 gh 已登录）
@@ -41,13 +41,13 @@ src/
   storage/db.ts         IndexedDB：courses / photos 两表，schema v2
   storage/opfs.ts       OPFS 文件 save/read/delete
   lib/exif.ts           手写 JPEG/PNG EXIF 时间解析（含单测）
-  lib/matching.ts       拍摄时间 × 课表时间槽匹配（含单测）
+  lib/matching.ts       拍摄时间 × 课表匹配：星期+时间窗+教学周次（单双周/周范围），含单测
   lib/crop.ts           边缘检测 + 透视校正 + 缩略图 + solveHomography/scaleQuad（含单测；2026-09-18 的实验改动已回滚，见 §7）
-  lib/sessions.ts       按"哪一节课"分组（课程详情页时间线用）
+  lib/sessions.ts       课堂时间线分组 + 「第几堂」推导（跨槽连续编号，按学期时间槽），含单测
   lib/enhance.ts        裁剪图自动增强：自动色阶（去投影偏色）+ 轻锐化，纯函数含单测
   lib/annotations.ts    标注纯函数：笔迹抽稀/命中测试/文字框尺寸，含单测
   components/AnnotationLayer 标注 SVG 渲染层（multiply 混合，随图片 transform 同步）
-  lib/backup.ts         zip 导出/导入合并
+  lib/backup.ts         zip 导出/导入合并（v2 起携带 settings：学期起点）
   components/CropEditor 四角拖拽裁剪编辑器（含 persistPhoto / updatePhotoCrop）
   components/Lightbox   大图查看（键盘翻页、原图/裁剪切换）
 components/RecropDialog 对已入库照片重新裁剪
@@ -67,6 +67,7 @@ components/SideNav    宽屏左侧导航（lg 断点）
 PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入口；若发布前手机里还有旧数据，先在手机端导出再发布新版），因此「备份」页的完整备份包 = 唯一异地副本，**每月导出一次**的纪律比以前更重要，这个功能不是锦上添花，是数据安全的地基。
 
 `PhotoMeta` 关键字段：`fileName`（原图）、`thumbFileName`（~512px 缩略图）、`cropFileName`（透视校正+自动增强图）、`quad`（四角，原图像素坐标）、`takenAt`（EXIF 时间）、`courseId`（`''` = 未归属）、`capture`（`auto`/`manual`/`none`）、`starred`（重点标记）、`annotations`（矢量标注层，重新裁剪会清空）、`backedUpAt`（被完整包收录时间）、`originalRemoved`（原图已清理）。
+`ScheduleSlot.weeks`：周次范围 `{from,to,step}`（缺省每周）——单周/双周/前八周/后八周都是特例；settings 表存 `semesterStart`（学期第一周任一天），教学周序号与「第几堂」均由它推导。
 
 ## 5. 已完成（都有验收标准，详见 PLAN.md 的勾选）
 
@@ -82,6 +83,7 @@ PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入�
 | 阶段3 | PC-first 转向：三种导入方式、备份语义、砍除手机端 UI；修复大图「关闭 ✕」；已发布 | ✅ |
 | 阶段4 | 复习优化第一批：大图缩放/平移/连播、标星+重点过滤、裁剪图自动增强（单测共 22 个） | ✅ |
 | 阶段5 | 图片标注：碳素笔/荧光笔/文字框/橡皮/撤销，矢量层存储+自动保存，重新裁剪清空（单测共 26 个） | ✅ |
+| 阶段6 | 单双周与堂数：教学周体系（settings 表 schema v3）、时间槽周次范围、匹配周次过滤、「第几堂」推导、「重新归课」、备份 v2 携带学期配置（单测共 42 个） | ✅ |
 | 部署 | GitHub Pages，SW 已注册激活，可离线/加主屏幕 | ✅ |
 
 真机反馈（用户实际在教室用过一次）：**自动归课成立**（核心假设通过）、**轻微卡顿**、**自动裁剪"框到了但框得太大"**（当前主要缺陷，见 §7）。
