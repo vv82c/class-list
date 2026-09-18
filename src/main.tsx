@@ -5,7 +5,15 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import './index.css';
 
-registerSW({ immediate: true, serviceWorkerUrl: 'sw.js' });
+registerSW({
+  immediate: true,
+  onRegisteredSW(url) {
+    console.log('SW registered at', url);
+  },
+  onRegisterError(err) {
+    console.error('SW register failed', err);
+  },
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
