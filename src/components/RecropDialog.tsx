@@ -48,6 +48,12 @@ export default function RecropDialog({ photo, onClose, onSaved }: Props) {
             index={0}
             onSave={async (crop) => {
               if (crop) {
+                if (
+                  photo.annotations?.length &&
+                  !confirm('这张照片已有标注。重新裁剪后画面几何会变化，所有标注将被清空。继续？')
+                ) {
+                  return;
+                }
                 await updatePhotoCrop(photo, crop.blob, crop.quad);
                 onSaved();
               }

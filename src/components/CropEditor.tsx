@@ -73,13 +73,14 @@ export async function updatePhotoCrop(photo: PhotoMeta, blob: Blob, quad: Quad):
   const thumb = await makeThumbnail(bmp, bmp.width, bmp.height);
   bmp.close();
   await saveFile(thumbFileName, thumb);
-  await putPhoto({
-    ...photo,
-    cropFileName,
-    thumbFileName,
-    quad: quad.map(([x, y]) => [x, y]) as PhotoMeta['quad'],
-    backedUpAt: null, // 内容变了，不再是备份包里的那份，取消"已备份"标记以防被清理
-  });
+    await putPhoto({
+      ...photo,
+      cropFileName,
+      thumbFileName,
+      quad: quad.map(([x, y]) => [x, y]) as PhotoMeta['quad'],
+      backedUpAt: null, // 内容变了，不再是备份包里的那份，取消"已备份"标记以防被清理
+      annotations: [], // 画面几何变了，旧标注必然错位，清空
+    });
 }
 
 interface Props {

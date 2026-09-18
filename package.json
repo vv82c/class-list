@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/exif.test.ts src/lib/matching.test.ts src/lib/crop.test.ts src/lib/enhance.test.ts"
+    "test": "node --import tsx --test src/lib/exif.test.ts src/lib/matching.test.ts src/lib/crop.test.ts src/lib/enhance.test.ts src/lib/annotations.test.ts"
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1",

@@ -3,7 +3,7 @@ import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
 import { deletePhoto, getCourses, getPhotos, putPhoto } from '../storage/db';
-import { displayFile, type Course, type PhotoMeta } from '../types';
+import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
 type Filter = 'all' | 'pending' | 'uncategorized' | 'starred';
 
@@ -140,6 +140,11 @@ export default function ArchivePage() {
     await putPhoto({ ...photo, starred: !photo.starred });
     // 在"重点"过滤下取消标星后这张图会从列表消失，关掉大图避免指向错位
     if (filter === 'starred' && photo.starred) setViewIndex(null);
+    await reload();
+  }
+
+  async function saveAnnotations(photo: PhotoMeta, annotations: Annotation[]) {
+    await putPhoto({ ...photo, annotations });
     await reload();
   }
 
@@ -289,6 +294,7 @@ export default function ArchivePage() {
           onIndex={setViewIndex}
           onClose={() => setViewIndex(null)}
           onToggleStar={toggleStar}
+          onSaveAnnotations={saveAnnotations}
           onRecrop={(p) => {
             setViewIndex(null);
             setRecrop(p);

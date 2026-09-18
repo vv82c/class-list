@@ -5,7 +5,7 @@ import RecropDialog from '../components/RecropDialog';
 import { groupSessions } from '../lib/sessions';
 import { usePhotoUrl } from '../lib/ui';
 import { getCourse, getPhotosByCourse, putPhoto } from '../storage/db';
-import { displayFile, type Course, type PhotoMeta } from '../types';
+import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
 function Cell({ photo, onOpen }: { photo: PhotoMeta; onOpen: () => void }) {
   const url = usePhotoUrl(displayFile(photo));
@@ -50,6 +50,11 @@ export default function CourseDetailPage() {
 
   async function toggleStar(photo: PhotoMeta) {
     await putPhoto({ ...photo, starred: !photo.starred });
+    await reload();
+  }
+
+  async function saveAnnotations(photo: PhotoMeta, annotations: Annotation[]) {
+    await putPhoto({ ...photo, annotations });
     await reload();
   }
 
@@ -129,6 +134,7 @@ export default function CourseDetailPage() {
           onIndex={(i) => setView({ ...view, index: i })}
           onClose={() => setView(null)}
           onToggleStar={toggleStar}
+          onSaveAnnotations={saveAnnotations}
           onRecrop={(p) => {
             setView(null);
             setRecrop(p);

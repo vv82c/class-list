@@ -12,6 +12,33 @@ export interface Course {
   createdAt: number;
 }
 
+/** 笔迹/文字标注（矢量层）。坐标为相对裁剪图的 0~1 归一化值（y 同为图宽单位），与分辨率解耦 */
+export interface PenAnnotation {
+  kind: 'pen';
+  id: string;
+  createdAt: number;
+  color: string;
+  width: number; // 归一化线宽（相对图宽）
+  points: [number, number][];
+}
+export interface HighlighterAnnotation {
+  kind: 'highlighter';
+  id: string;
+  createdAt: number;
+  color: string;
+  width: number;
+  points: [number, number][];
+}
+export interface TextAnnotation {
+  kind: 'text';
+  id: string;
+  createdAt: number;
+  x: number; // 文字框左上角
+  y: number;
+  text: string;
+}
+export type Annotation = PenAnnotation | HighlighterAnnotation | TextAnnotation;
+
 export interface PhotoMeta {
   id: string;
   fileName: string; // 原图（OPFS 文件名）
@@ -26,6 +53,7 @@ export interface PhotoMeta {
   courseId: string; // '' 表示未归属课程
   capture: 'auto' | 'manual' | 'none'; // 归档方式，M4 起使用
   starred?: boolean; // 重点标记：复习时按课程 + 只看标星
+  annotations?: Annotation[]; // 矢量标注层（重新裁剪会清空）
   note: string;
 }
 
