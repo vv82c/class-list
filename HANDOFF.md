@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # vite --host，手机连同一路由访问 http://<局域网IP>:5173
-npm test           # node --import tsx --test，22 个 lib 层单测
+npm test           # node --import tsx --test，26 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
 # 发布（需 gh 已登录）
@@ -45,6 +45,8 @@ src/
   lib/crop.ts           边缘检测 + 透视校正 + 缩略图 + solveHomography/scaleQuad（含单测；2026-09-18 的实验改动已回滚，见 §7）
   lib/sessions.ts       按"哪一节课"分组（课程详情页时间线用）
   lib/enhance.ts        裁剪图自动增强：自动色阶（去投影偏色）+ 轻锐化，纯函数含单测
+  lib/annotations.ts    标注纯函数：笔迹抽稀/命中测试/文字框尺寸，含单测
+  components/AnnotationLayer 标注 SVG 渲染层（multiply 混合，随图片 transform 同步）
   lib/backup.ts         zip 导出/导入合并
   components/CropEditor 四角拖拽裁剪编辑器（含 persistPhoto / updatePhotoCrop）
   components/Lightbox   大图查看（键盘翻页、原图/裁剪切换）
@@ -64,7 +66,7 @@ components/SideNav    宽屏左侧导航（lg 断点）
 
 PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入口；若发布前手机里还有旧数据，先在手机端导出再发布新版），因此「备份」页的完整备份包 = 唯一异地副本，**每月导出一次**的纪律比以前更重要，这个功能不是锦上添花，是数据安全的地基。
 
-`PhotoMeta` 关键字段：`fileName`（原图）、`thumbFileName`（~512px 缩略图）、`cropFileName`（透视校正+自动增强图）、`quad`（四角，原图像素坐标）、`takenAt`（EXIF 时间）、`courseId`（`''` = 未归属）、`capture`（`auto`/`manual`/`none`）、`starred`（重点标记）、`backedUpAt`（被完整包收录时间）、`originalRemoved`（原图已清理）。
+`PhotoMeta` 关键字段：`fileName`（原图）、`thumbFileName`（~512px 缩略图）、`cropFileName`（透视校正+自动增强图）、`quad`（四角，原图像素坐标）、`takenAt`（EXIF 时间）、`courseId`（`''` = 未归属）、`capture`（`auto`/`manual`/`none`）、`starred`（重点标记）、`annotations`（矢量标注层，重新裁剪会清空）、`backedUpAt`（被完整包收录时间）、`originalRemoved`（原图已清理）。
 
 ## 5. 已完成（都有验收标准，详见 PLAN.md 的勾选）
 
@@ -79,6 +81,7 @@ PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入�
 | 阶段2 | 回滚裁剪实验改动、裁剪界面"整体收缩/放大"兜底按钮、jsWarp 单应修复+单测（共 18 个）、宽屏 1440px 实测通过、真实照片回归 harness+基线 | ✅ |
 | 阶段3 | PC-first 转向：三种导入方式、备份语义、砍除手机端 UI；修复大图「关闭 ✕」；已发布 | ✅ |
 | 阶段4 | 复习优化第一批：大图缩放/平移/连播、标星+重点过滤、裁剪图自动增强（单测共 22 个） | ✅ |
+| 阶段5 | 图片标注：碳素笔/荧光笔/文字框/橡皮/撤销，矢量层存储+自动保存，重新裁剪清空（单测共 26 个） | ✅ |
 | 部署 | GitHub Pages，SW 已注册激活，可离线/加主屏幕 | ✅ |
 
 真机反馈（用户实际在教室用过一次）：**自动归课成立**（核心假设通过）、**轻微卡顿**、**自动裁剪"框到了但框得太大"**（当前主要缺陷，见 §7）。
