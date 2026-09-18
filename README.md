@@ -64,5 +64,6 @@ npx gh-pages -d dist  # 发布到 GitHub Pages
 
 ## 项目文档
 
+- [ROADMAP.md](ROADMAP.md)——未来计划（OCR 搜索、按需小项、运维纪律、砍掉清单）
 - [PLAN.md](PLAN.md)——施工计划与阶段日志（产品定位、技术选型、数据模型、每阶段验收记录）
 - [HANDOFF.md](HANDOFF.md)——交接文档（架构速览、关键决策与否决项、踩坑清单、待办）
