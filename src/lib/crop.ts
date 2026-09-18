@@ -170,8 +170,40 @@ export async function warpQuad(
 }
 
 /**
- * 纯 JS 回退：对 4 组对应点 (dst→src) 建 8×8 线性方程组，高斯消元求单应 H，
- * 再对目标图逐像素反算源坐标 + 双线性采样。
+ * 解 dst→src 的单应 H（8 参数 DLT，h8=1）：返回 [h0..h7]，使得
+ * X = (h0·x + h1·y + h2) / (h6·x + h7·y + 1)，Y 同理用 h3..h5。
+ */
+export function solveHomography(dst: Quad, src: Quad): number[] {
+  const A: number[][] = [];
+  const b: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = dst[i];
+    const [X, Y] = src[i];
+    A.push([x, y, 1, 0, 0, 0, -x * X, -y * X]);
+    b.push(X);
+    A.push([0, 0, 0, x, y, 1, -x * Y, -y * Y]);
+    b.push(Y);
+  }
+  return solveLinear(A, b);
+}
+
+/** 四角绕质心同步缩放（factor<1 收缩、>1 放大），可选夹到图像边界内 */
+export function scaleQuad(quad: Quad, factor: number, bounds?: { w: number; h: number }): Quad {
+  const cx = (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4;
+  const cy = (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4;
+  return quad.map(([x, y]) => {
+    const nx = cx + (x - cx) * factor;
+    const ny = cy + (y - cy) * factor;
+    if (!bounds) return [nx, ny];
+    return [
+      Math.min(Math.max(nx, 0), bounds.w),
+      Math.min(Math.max(ny, 0), bounds.h),
+    ];
+  }) as Quad;
+}
+
+/**
+ * 纯 JS 回退：解 dst→src 单应 H，再对目标图逐像素反算源坐标 + 双线性采样。
  */
 async function jsWarp(
   source: CanvasImageSource,
@@ -188,23 +220,11 @@ async function jsWarp(
     [outW - 1, outH - 1],
     [0, outH - 1],
   ];
-  // H = [h1..h7], h8=1: X = (h1x+h2y+h3)/(h7x+1), Y = (h4x+h5y+h6)/(h7x+1)
-  const A: number[][] = [];
-  const b: number[] = [];
-  for (let i = 0; i < 4; i++) {
-    const [x, y] = dst[i];
-    const [X, Y] = quad[i];
-    const g = x * X + y * X - X;
-    A.push([x, y, 1, 0, 0, 0, g]);
-    b.push(-X);
-    A.push([0, 0, 0, x, y, 1, (x * Y + y * Y - Y)]);
-    b.push(-Y);
-  }
-  const h = solveLinear(A, b);
+  const h = solveHomography(dst as Quad, quad);
   const out = new Uint8ClampedArray(outW * outH * 4);
   for (let py = 0; py < outH; py++) {
     for (let px = 0; px < outW; px++) {
-      const den = h[6] * px + 1;
+      const den = h[6] * px + h[7] * py + 1;
       const sx = (h[0] * px + h[1] * py + h[2]) / den;
       const sy = (h[3] * px + h[4] * py + h[5]) / den;
       bilinear(img, srcW, srcH, sx, sy, out, (py * outW + px) * 4);

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>裁剪检测回归 harness（仅 dev）</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 16px; background: #f8fafc; color: #0f172a; }
+      main { display: flex; gap: 24px; flex-wrap: wrap; }
+      canvas { border: 1px solid #cbd5e1; max-height: 85vh; touch-action: none; cursor: crosshair; }
+      section { min-width: 320px; flex: 1; }
+      table { border-collapse: collapse; margin: 8px 0; }
+      td, th { border: 1px solid #cbd5e1; padding: 4px 10px; font-size: 14px; text-align: left; }
+      #verdict { font-size: 20px; font-weight: 700; margin: 10px 0; }
+      .pass { color: #16a34a; } .fail { color: #dc2626; } .none { color: #d97706; }
+      textarea { width: 100%; margin-top: 8px; font-family: ui-monospace, monospace; font-size: 12px; }
+      button { padding: 6px 14px; margin-right: 8px; }
+      p { max-width: 640px; }
+    </style>
+  </head>
+  <body>
+    <h1>裁剪检测回归</h1>
+    <p>
+      <span style="color:#dc2626">红实线 = 当前检测结果</span> ·
+      <span style="color:#16a34a">绿实线 = 人工标注幕布四角</span>（点击画布设置，按 左上→右上→右下→左下；已有 4 点后点击替换最近的角）·
+      <span style="color:#2563eb">蓝虚线 = 已记录基线</span>。
+      改动裁剪算法后必须回到本页跑一次：<b>与基线的 IoU ≥ 门槛才算通过</b>；若算法变好了，用「生成基线 JSON」更新基线并在 JSON 里注明原因。
+    </p>
+    <main>
+      <canvas id="cv" width="1200" height="1600"></canvas>
+      <section>
+        <div id="verdict" class="none">加载中…</div>
+        <table>
+          <tr><th>指标</th><th>值</th><th>说明</th></tr>
+          <tr><td>面积比（检测/标注）</td><td id="m-ratio">—</td><td>1.0 为准确，&gt;1 框太大</td></tr>
+          <tr><td>IoU（检测 vs 标注）</td><td id="m-iou-exp">—</td><td>越接近 1 越准</td></tr>
+          <tr><td>IoU（检测 vs 基线）</td><td id="m-iou-base">—</td><td>回归门槛</td></tr>
+        </table>
+        <div>
+          <button id="rerun">重新检测</button>
+          <button id="gen">生成基线 JSON</button>
+        </div>
+        <textarea id="out" rows="22" spellcheck="false"></textarea>
+      </section>
+    </main>
+    <script type="module">
+      import { detectQuad } from '/src/lib/crop';
+
+      const GATE_MIN_IOU_VS_BASELINE = 0.96;
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+      const img = new Image();
+      img.src = './fixtures/IMG20260918152105.jpg';
+
+      let cfg = { image: 'IMG20260918152105.jpg', expectedQuad: null, baseline: null, gates: { minIouVsBaseline: GATE_MIN_IOU_VS_BASELINE } };
+      let detected = null;
+
+      function loadCfg() {
+        return fetch('./fixtures/crop-regression.json')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => { if (j) cfg = j; })
+          .catch(() => {});
+      }
+
+      function polygonArea(q) {
+        let s = 0;
+        for (let i = 0; i < q.length; i++) {
+          const [x1, y1] = q[i];
+          const [x2, y2] = q[(i + 1) % q.length];
+          s += x1 * y2 - x2 * y1;
+        }
+        return Math.abs(s / 2);
+      }
+
+      /** 光栅化两个四边形算 IoU */
+      function quadIoU(a, b) {
+        const W = 300, H = 400;
+        const put = (q, data) => {
+          const c = document.createElement('canvas');
+          c.width = W; c.height = H;
+          const x = c.getContext('2d');
+          x.fillStyle = '#000';
+          x.beginPath();
+          q.forEach(([px, py], i) => (i ? x.lineTo(px / cv.width * W, py / cv.height * H) : x.moveTo(px / cv.width * W, py / cv.height * H)));
+          x.closePath();
+          x.fill();
+          return x.getImageData(0, 0, W, H).data;
+        };
+        const da = put(a), db = put(b);
+        let inter = 0, union = 0;
+        for (let i = 0; i < W * H; i++) {
+          const pa = da[i * 4 + 3] > 127, pb = db[i * 4 + 3] > 127;
+          if (pa && pb) inter++;
+          if (pa || pb) union++;
+        }
+        return union ? inter / union : 0;
+      }
+
+      function draw() {
+        ctx.drawImage(img, 0, 0, cv.width, cv.height);
+        const line = (q, color, width, dash) => {
+          ctx.save();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.setLineDash(dash || []);
+          ctx.beginPath();
+          q.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.closePath();
+          ctx.stroke();
+          q.forEach(([x, y]) => {
+            ctx.beginPath();
+            ctx.setLineDash([]);
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+          });
+          ctx.restore();
+        };
+        if (cfg.baseline?.detectedQuad) line(cfg.baseline.detectedQuad, '#2563eb', 3, [12, 8]);
+        if (cfg.expectedQuad) line(cfg.expectedQuad, '#16a34a', 3);
+        if (detected) line(detected, '#dc2626', 3);
+      }
+
+      function render() {
+        draw();
+        const v = document.getElementById('verdict');
+        if (!detected) { v.textContent = '检测中…'; v.className = 'none'; return; }
+        const hasExp = !!cfg.expectedQuad;
+        const ratio = hasExp ? polygonArea(detected) / polygonArea(cfg.expectedQuad) : null;
+        const iouExp = hasExp ? quadIoU(detected, cfg.expectedQuad) : null;
+        const iouBase = cfg.baseline?.detectedQuad ? quadIoU(detected, cfg.baseline.detectedQuad) : null;
+        document.getElementById('m-ratio').textContent = ratio == null ? '—' : ratio.toFixed(3);
+        document.getElementById('m-iou-exp').textContent = iouExp == null ? '—' : iouExp.toFixed(3);
+        document.getElementById('m-iou-base').textContent = iouBase == null ? '—' : iouBase.toFixed(3);
+        if (iouBase == null) {
+          v.textContent = '尚无基线：标注四角后点「生成基线 JSON」存入 fixtures/crop-regression.json';
+          v.className = 'none';
+        } else if (iouBase >= (cfg.gates?.minIouVsBaseline ?? GATE_MIN_IOU_VS_BASELINE)) {
+          v.textContent = `✅ 通过：与基线一致（IoU ${iouBase.toFixed(3)}）`;
+          v.className = 'pass';
+        } else {
+          v.textContent = `❌ 回归失败：检测框与基线偏离（IoU ${iouBase.toFixed(3)} < 门槛 ${cfg.gates?.minIouVsBaseline ?? GATE_MIN_IOU_VS_BASELINE}）`;
+          v.className = 'fail';
+        }
+      }
+
+      async function runDetect() {
+        detected = null;
+        render();
+        const r = await detectQuad(img, img.naturalWidth, img.naturalHeight);
+        detected = r.quad;
+        render();
+      }
+
+      cv.addEventListener('click', (e) => {
+        const x = (e.offsetX * cv.width) / cv.clientWidth;
+        const y = (e.offsetY * cv.height) / cv.clientHeight;
+        if (!cfg.expectedQuad) cfg.expectedQuad = [];
+        if (cfg.expectedQuad.length < 4) {
+          cfg.expectedQuad.push([Math.round(x), Math.round(y)]);
+        } else {
+          let best = 0, bestD = Infinity;
+          cfg.expectedQuad.forEach(([qx, qy], i) => {
+            const d = Math.hypot(qx - x, qy - y);
+            if (d < bestD) { bestD = d; best = i; }
+          });
+          cfg.expectedQuad[best] = [Math.round(x), Math.round(y)];
+        }
+        render();
+      });
+
+      document.getElementById('rerun').addEventListener('click', runDetect);
+      document.getElementById('gen').addEventListener('click', () => {
+        if (!detected || !cfg.expectedQuad || cfg.expectedQuad.length !== 4) {
+          document.getElementById('out').value = '请先完成 4 角标注并等检测结束';
+          return;
+        }
+        const out = {
+          image: cfg.image,
+          imageSize: { width: cv.width, height: cv.height },
+          note: 'expectedQuad 为人工标注的幕布真实四角（TL,TR,BR,BL）；baseline.detectedQuad 为记录时的算法输出。改算法必须先过本页门槛。',
+          expectedQuad: cfg.expectedQuad,
+          baseline: {
+            algorithm: 'stable@339d23a + jsWarp 修复（裁剪检测算法未动）',
+            recordedAt: new Date().toISOString().slice(0, 10),
+            detectedQuad: detected.map(([x, y]) => [Math.round(x), Math.round(y)]),
+            areaRatioVsExpected: +(polygonArea(detected) / polygonArea(cfg.expectedQuad)).toFixed(4),
+            iouVsExpected: +quadIoU(detected, cfg.expectedQuad).toFixed(4),
+          },
+          gates: { minIouVsBaseline: GATE_MIN_IOU_VS_BASELINE },
+        };
+        document.getElementById('out').value = JSON.stringify(out, null, 2);
+      });
+
+      loadCfg().then(() => {
+        if (img.complete) runDetect();
+        else img.onload = runDetect;
+      });
+    </script>
+  </body>
+</html>

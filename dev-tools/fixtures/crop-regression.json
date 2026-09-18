@@ -1,0 +1,53 @@
+{
+  "image": "IMG20260918152105.jpg",
+  "imageSize": {
+    "width": 1200,
+    "height": 1600
+  },
+  "note": "expectedQuad 为人工标注的幕布真实四角（TL,TR,BR,BL）；baseline.detectedQuad 为记录时的算法输出。改算法必须先过本页门槛。",
+  "expectedQuad": [
+    [
+      227,
+      617
+    ],
+    [
+      1153,
+      435
+    ],
+    [
+      1170,
+      1504
+    ],
+    [
+      134,
+      1281
+    ]
+  ],
+  "baseline": {
+    "algorithm": "stable@339d23a + jsWarp 修复（裁剪检测算法未动）",
+    "recordedAt": "2026-09-18",
+    "detectedQuad": [
+      [
+        36,
+        48
+      ],
+      [
+        1164,
+        48
+      ],
+      [
+        1164,
+        1552
+      ],
+      [
+        36,
+        1552
+      ]
+    ],
+    "areaRatioVsExpected": 1.994,
+    "iouVsExpected": 0.5006
+  },
+  "gates": {
+    "minIouVsBaseline": 0.96
+  }
+}

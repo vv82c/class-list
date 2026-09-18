@@ -4,6 +4,7 @@ import {
   detectQuad,
   makeThumbnail,
   quadTargetSize,
+  scaleQuad,
   warpQuad,
   type Quad,
 } from '../lib/crop';
@@ -229,6 +230,31 @@ export default function CropEditor({ queue, index, onSave, onAutoSaveRest, onCan
     ]);
   }
 
+  // 整体收缩/放大：自动框偏大（框到光晕/墙）或偏小时的不依赖算法的兜底，按住可连续移动
+  const holdTimer = useRef<number | null>(null);
+
+  function scaleBy(factor: number) {
+    setQuad((q) => (q ? scaleQuad(q, factor, { w: size.w, h: size.h }) : q));
+  }
+
+  function startHold(factor: number) {
+    stopHold();
+    scaleBy(factor);
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = window.setInterval(() => scaleBy(factor), 90);
+    }, 350);
+  }
+
+  function stopHold() {
+    if (holdTimer.current != null) {
+      clearTimeout(holdTimer.current);
+      clearInterval(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }
+
+  useEffect(() => stopHold, []);
+
   const remaining = queue.length - index - 1;
   const target = quad ? quadTargetSize(quad) : null;
 
@@ -292,6 +318,26 @@ export default function CropEditor({ queue, index, onSave, onAutoSaveRest, onCan
           className="rounded-xl border border-slate-300 bg-white py-3 disabled:opacity-40"
         >
           其余 {remaining} 张自动裁剪入库
+        </button>
+        <button
+          disabled={status !== 'ready'}
+          onPointerDown={() => startHold(0.96)}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onContextMenu={(e) => e.preventDefault()}
+          className="touch-none select-none rounded-xl border border-slate-300 bg-white py-2 text-sm text-slate-600 disabled:opacity-40"
+        >
+          整体收缩（框到墙时按住）
+        </button>
+        <button
+          disabled={status !== 'ready'}
+          onPointerDown={() => startHold(1.04)}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onContextMenu={(e) => e.preventDefault()}
+          className="touch-none select-none rounded-xl border border-slate-300 bg-white py-2 text-sm text-slate-600 disabled:opacity-40"
+        >
+          整体放大（裁掉内容时按住）
         </button>
         <button
           disabled={status !== 'ready'}
