@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
+import SideNav from './components/SideNav';
 import SchedulePage from './pages/SchedulePage';
 import CapturePage from './pages/CapturePage';
 import ArchivePage from './pages/ArchivePage';
@@ -9,8 +10,9 @@ import SyncPage from './pages/SyncPage';
 
 export default function App() {
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col bg-slate-50 text-slate-900">
-      <div className="flex-1 pb-20">
+    <div className="mx-auto flex min-h-dvh w-full max-w-lg items-stretch bg-slate-50 text-slate-900 lg:max-w-6xl">
+      <SideNav />
+      <div className="min-w-0 flex-1 pb-20 lg:pb-0">
         <Routes>
           <Route path="/" element={<SchedulePage />} />
           <Route path="/capture" element={<CapturePage />} />

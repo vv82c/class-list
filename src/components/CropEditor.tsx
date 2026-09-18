@@ -60,6 +60,24 @@ export async function persistPhoto(
   return meta;
 }
 
+/** 对已有照片重新裁剪：覆盖裁剪图并用新裁剪图重建缩略图 */
+export async function updatePhotoCrop(photo: PhotoMeta, blob: Blob, quad: Quad): Promise<void> {
+  const cropFileName = photo.cropFileName ?? `${photo.id}-crop.jpg`;
+  const thumbFileName = photo.thumbFileName ?? `${photo.id}-thumb.jpg`;
+  await saveFile(cropFileName, blob);
+  const bmp = await createImageBitmap(blob);
+  const thumb = await makeThumbnail(bmp, bmp.width, bmp.height);
+  bmp.close();
+  await saveFile(thumbFileName, thumb);
+  await putPhoto({
+    ...photo,
+    cropFileName,
+    thumbFileName,
+    quad: quad.map(([x, y]) => [x, y]) as PhotoMeta['quad'],
+    backedUpAt: null, // 内容变了，不再是备份包里的那份，取消"已备份"标记以防被清理
+  });
+}
+
 interface Props {
   queue: File[];
   index: number;

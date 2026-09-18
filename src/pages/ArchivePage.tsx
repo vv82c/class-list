@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
+import Lightbox from '../components/Lightbox';
+import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
 import { deletePhoto, getCourses, getPhotos, putPhoto } from '../storage/db';
 import { displayFile, type Course, type PhotoMeta } from '../types';
 
 type Filter = 'all' | 'pending' | 'uncategorized';
 
-function Thumb({ photo }: { photo: PhotoMeta }) {
+function Thumb({ photo, onOpen }: { photo: PhotoMeta; onOpen?: () => void }) {
   const url = usePhotoUrl(displayFile(photo));
   return (
-    <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-slate-200">
+    <div
+      onClick={onOpen}
+      className={`relative aspect-square w-full overflow-hidden rounded-lg bg-slate-200 ${onOpen ? 'cursor-zoom-in' : ''}`}
+    >
       {url ? (
         <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
       ) : (
@@ -29,15 +34,17 @@ function PendingCard({
   photo,
   courses,
   onAction,
+  onOpen,
 }: {
   photo: PhotoMeta;
   courses: Course[];
   onAction: () => void;
+  onOpen: () => void;
 }) {
   const course = courses.find((c) => c.id === photo.courseId);
   return (
     <div className="rounded-xl border border-amber-200 bg-white p-2">
-      <Thumb photo={photo} />
+      <Thumb photo={photo} onOpen={onOpen} />
       <p className="mt-1 text-[10px] text-slate-400">{formatTime(photo.takenAt)}</p>
       <div className="mt-1 flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: course?.color }} />
@@ -80,6 +87,8 @@ export default function ArchivePage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [viewIndex, setViewIndex] = useState<number | null>(null);
+  const [recrop, setRecrop] = useState<PhotoMeta | null>(null);
 
   const reload = async () => {
     setPhotos(await getPhotos());
@@ -171,20 +180,25 @@ export default function ArchivePage() {
           {filter === 'pending' ? '没有待确认的照片' : filter === 'uncategorized' ? '没有未分类照片' : '还没有照片，去"拍照"页导入一些吧'}
         </p>
       ) : (
-        <ul className="grid grid-cols-3 gap-2">
-          {shown.map((p) => {
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          {shown.map((p, i) => {
             const isSelected = selected.has(p.id);
             return (
               <li
                 key={p.id}
                 onClick={selectMode ? () => toggleSelect(p.id) : undefined}
-                className={`relative ${selectMode ? 'cursor-pointer' : 'group'}`}
+                className={`relative ${selectMode ? 'cursor-pointer' : ''}`}
               >
                 {filter === 'pending' && !selectMode ? (
-                  <PendingCard photo={p} courses={courses} onAction={reload} />
+                  <PendingCard
+                    photo={p}
+                    courses={courses}
+                    onAction={reload}
+                    onOpen={() => setViewIndex(i)}
+                  />
                 ) : (
                   <>
-                    <Thumb photo={p} />
+                    <Thumb photo={p} onOpen={selectMode ? undefined : () => setViewIndex(i)} />
                     <p className="mt-0.5 text-[10px] leading-tight text-slate-400">
                       {formatTime(p.takenAt)}
                     </p>
@@ -242,6 +256,21 @@ export default function ArchivePage() {
           </div>
         </div>
       )}
+
+      {viewIndex !== null && shown && (
+        <Lightbox
+          photos={shown}
+          index={viewIndex}
+          courses={courses}
+          onIndex={setViewIndex}
+          onClose={() => setViewIndex(null)}
+          onRecrop={(p) => {
+            setViewIndex(null);
+            setRecrop(p);
+          }}
+        />
+      )}
+      {recrop && <RecropDialog photo={recrop} onClose={() => setRecrop(null)} onSaved={reload} />}
     </div>
   );
 }
