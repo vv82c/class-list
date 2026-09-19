@@ -3,7 +3,9 @@
 > **上课不用记笔记，认真听课就好。**
 > 拍下来的 PPT 和板书，课后拖进应用：自动裁剪、增强，并按课表归到对应的课程和"第几堂"。
 
-在线使用：**https://vv82c.github.io/class-list/**（桌面网页应用，Chrome/Edge 使用并固定用一个；支持离线打开）
+**[在线使用 → https://vv82c.github.io/class-list/](https://vv82c.github.io/class-list/)**
+
+（桌面网页应用，Chrome/Edge 使用并固定用一个；支持离线打开）
 
 ## 它解决什么问题
 
