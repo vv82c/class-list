@@ -4,7 +4,20 @@ import { deleteCourse, getCourse, getSettings, newId, putCourse } from '../stora
 import { describeWeeks } from '../lib/matching';
 import { WEEKDAY_NAMES, type Course, type ScheduleSlot, type WeeksSpec } from '../types';
 
-export const COURSE_COLORS = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#64748b'];
+export const COURSE_COLORS = [
+  '#0ea5e9', // 天蓝
+  '#3b82f6', // 蓝
+  '#8b5cf6', // 紫
+  '#ec4899', // 粉
+  '#ef4444', // 红
+  '#f97316', // 橙
+  '#f59e0b', // 琥珀
+  '#eab308', // 黄
+  '#10b981', // 翠绿
+  '#14b8a6', // 青
+  '#64748b', // 石板灰
+  '#78716c', // 棕灰
+];
 
 /** 周次预设；自定义 = 从/到/手填 */
 const WEEK_PRESETS: { key: string; label: string; spec: WeeksSpec | null }[] = [
@@ -145,13 +158,13 @@ export default function CourseFormPage() {
       />
 
       <label className="mb-1 block text-sm text-slate-500">颜色</label>
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex max-w-md flex-wrap gap-2">
         {COURSE_COLORS.map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => setColor(c)}
-            className={`h-7 w-7 rounded-full ${color === c ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
+            className={`h-8 w-8 rounded-full ${color === c ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
             style={{ backgroundColor: c }}
             aria-label={`颜色 ${c}`}
           />

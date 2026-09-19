@@ -93,7 +93,7 @@ function WeekView({ courses }: { courses: Course[] }) {
                 <Link
                   key={i}
                   to={`/course-form?course=${b.slot.course.id}`}
-                  className="absolute overflow-hidden rounded-md p-1 text-[10px] leading-tight text-white shadow-sm"
+                  className="absolute overflow-hidden rounded-md p-1 text-xs leading-tight text-white shadow-sm"
                   style={{
                     top: Math.max(0, (b.slot.startMin - DAY_START) * PX_PER_MIN) + 1,
                     height: Math.max(18, (b.slot.endMin - b.slot.startMin) * PX_PER_MIN - 2),
