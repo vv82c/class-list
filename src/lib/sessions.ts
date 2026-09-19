@@ -68,7 +68,12 @@ export function groupPendingByCourse(photos: PhotoMeta[]): PendingGroup[] {
   }
   return [...map.entries()]
     .map(([courseId, ps]) => ({ courseId, photos: ps }))
-    .sort((a, b) => b.photos.length - a.photos.length || (a.courseId === '') - (b.courseId === '') || a.courseId.localeCompare(b.courseId));
+    .sort(
+      (a, b) =>
+        b.photos.length - a.photos.length ||
+        Number(a.courseId === "") - Number(b.courseId === "") ||
+        a.courseId.localeCompare(b.courseId),
+    );
 }
 
 /**
