@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # vite --host，本机/局域网访问 http://<IP>:5173
-npm test           # node --import tsx --test，47 个 lib 层单测
+npm test           # node --import tsx --test，52 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
 # 发布（需 gh 已登录）
@@ -49,6 +49,7 @@ src/
   components/AnnotationLayer 标注 SVG 渲染层（multiply 混合，随图片 transform 同步）
   lib/backup.ts         zip 导出/导入合并（v2 起携带 settings：学期起点）
   lib/photoFolder.ts    照片文件夹导出：导出计划纯函数 + File System Access API 复制到所选目录，含单测
+  lib/cleanup.ts        清理：孤儿比对/课程计划/进度键纯函数 + 缓存统计/运行时缓存清理/全量清空编排，含单测
   components/CropEditor 四角拖拽裁剪编辑器（含 persistPhoto / updatePhotoCrop）
   components/Lightbox   大图查看（键盘翻页、原图/裁剪切换）
 components/RecropDialog 对已入库照片重新裁剪

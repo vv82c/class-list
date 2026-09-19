@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
 import { downloadBlob, exportBundle, importBundle, type ExportSummary, type ImportSummary } from '../lib/backup';
 import { exportPhotosToFolder } from '../lib/photoFolder';
+import {
+  cacheStats,
+  clearRuntimeCaches,
+  courseCleanupPlan,
+  findOrphans,
+  unregisterServiceWorkers,
+  wipeAllData,
+  type CacheStat,
+} from '../lib/cleanup';
 import { deleteFile } from '../storage/opfs';
-import { getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
+import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
 import type { Course, PhotoMeta } from '../types';
 
 function human(bytes: number): string {
@@ -14,6 +23,8 @@ export default function SyncPage() {
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [cacheList, setCacheList] = useState<CacheStat[] | null>(null);
+  const [cleanupCourse, setCleanupCourse] = useState('');
   const [usage, setUsage] = useState<{ used: number; quota: number } | null>(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
@@ -25,6 +36,9 @@ export default function SyncPage() {
     setSemesterStart((await getSettings()).semesterStart);
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est) setUsage({ used: est.usage ?? 0, quota: est.quota ?? 0 });
+    cacheStats()
+      .then(setCacheList)
+      .catch(() => setCacheList([]));
   };
   useEffect(() => {
     reload();
@@ -95,6 +109,106 @@ export default function SyncPage() {
         setError(`导出失败：${(e as Error).message}`);
       }
     } finally {
+      setBusy('');
+    }
+  }
+
+  async function onClearCaches() {
+    setBusy('正在清除应用缓存…');
+    setError('');
+    setMessage('');
+    try {
+      const r = await clearRuntimeCaches();
+      await reload();
+      setMessage(
+        r.names.length
+          ? `已清除 ${r.names.length} 个运行时缓存（${human(r.bytes)}）：${r.names.join('、')}。预缓存保留，应用仍可离线打开；下次裁剪照片时会重新下载检测引擎。`
+          : '没有可清除的运行时缓存。',
+      );
+    } catch (e) {
+      setError(`清除失败：${(e as Error).message}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onCleanOrphans() {
+    setBusy('正在扫描孤儿文件…');
+    setError('');
+    setMessage('');
+    try {
+      const { listFiles, deleteFile: rm } = await import('../storage/opfs');
+      const orphans = findOrphans(await listFiles(), photos);
+      if (!orphans.length) {
+        setMessage('没有孤儿文件：沙箱内所有文件都被照片记录正常引用。');
+        return;
+      }
+      if (!confirm(`发现 ${orphans.length} 个未被任何照片记录引用的孤儿文件，删除后不可恢复。确定清理吗？`)) return;
+      setBusy(`正在清理 ${orphans.length} 个孤儿文件…`);
+      for (const f of orphans) await rm(f).catch(() => {});
+      await reload();
+      setMessage(`已清理 ${orphans.length} 个孤儿文件。`);
+    } catch (e) {
+      setError(`扫描失败：${(e as Error).message}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onDeleteCoursePhotos() {
+    if (!cleanupCourse) return;
+    const plan = courseCleanupPlan(cleanupCourse, photos);
+    if (!plan.length) {
+      setMessage('该课程名下没有照片。');
+      return;
+    }
+    const name = courses.find((c) => c.id === cleanupCourse)?.name ?? '该课程';
+    if (
+      !confirm(
+        `将删除「${name}」名下 ${plan.length} 张照片（图片文件与记录一并删除），此操作不可恢复。\n\n若尚未备份，请先导出完整备份包。确定删除吗？`,
+      )
+    )
+      return;
+    setBusy(`正在删除 ${plan.length} 张照片…`);
+    setError('');
+    setMessage('');
+    try {
+      for (const p of plan) await deletePhoto(p);
+      setCleanupCourse('');
+      await reload();
+      setMessage(`已删除「${name}」名下 ${plan.length} 张照片。`);
+    } catch (e) {
+      setError(`删除失败：${(e as Error).message}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onWipeAll() {
+    const unbackup = photos.filter((p) => !p.backedUpAt && !p.originalRemoved).length;
+    const first = `将清空本应用的全部数据：${courses.length} 门课程、${photos.length} 张照片的记录与全部图片文件。\n\n此操作不可恢复，完整备份包是唯一恢复手段。${
+      unbackup > 0 ? `\n\n⚠ 警告：其中 ${unbackup} 张照片尚未包含在任何备份中！` : ''
+    }\n\n确定要继续吗？`;
+    if (!confirm(first)) return;
+    if (prompt('这是最后一步：请输入"清空"两个字以确认（复制粘贴无效请手动输入）') !== '清空') {
+      setMessage('已取消，数据未动。');
+      return;
+    }
+    setBusy('正在清空全部数据…');
+    setError('');
+    setMessage('');
+    try {
+      const r = await wipeAllData();
+      const withSw = confirm(
+        `已删除 ${r.files} 个文件并清空数据库。\n\n是否同时注销 Service Worker 并清除离线缓存？（彻底移除应用痕迹，下次打开需重新下载应用）`,
+      );
+      if (withSw) {
+        await unregisterServiceWorkers();
+        for (const name of await caches.keys()) await caches.delete(name);
+      }
+      location.reload();
+    } catch (e) {
+      setError(`清空失败：${(e as Error).message}`);
       setBusy('');
     }
   }
@@ -201,6 +315,69 @@ export default function SyncPage() {
         说明：完整备份含原图，是数据唯一的异地副本，建议每月导出一次并存到网盘/移动硬盘；
         清除浏览器站点数据或重装系统会清空本机数据，备份包是唯一的恢复手段。
       </p>
+
+      <div className="mt-6 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+        <h2 className="text-sm font-semibold text-slate-700">清理</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          缓存与数据严格分离：缓存清理无损，数据清理不可恢复。占用：照片数据约{' '}
+          {usage && cacheList
+            ? human(Math.max(0, usage.used - cacheList.reduce((s, c) => s + c.bytes, 0)))
+            : '…'}
+          ，应用缓存{' '}
+          {cacheList ? human(cacheList.reduce((s, c) => s + c.bytes, 0)) : '…'}
+          {cacheList?.length ? `（${cacheList.map((c) => `${c.name === 'opencv-wasm' ? '检测引擎' : c.name.startsWith('workbox-precache') ? '应用壳' : c.name} ${human(c.bytes)}`).join('、')}）` : ''}
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <button
+            disabled={!!busy}
+            onClick={onClearCaches}
+            className="rounded-lg border border-slate-300 bg-white py-2 text-slate-600 disabled:opacity-40"
+          >
+            清除应用缓存（无损）
+          </button>
+          <button
+            disabled={!!busy}
+            onClick={onCleanOrphans}
+            className="rounded-lg border border-slate-300 bg-white py-2 text-slate-600 disabled:opacity-40"
+          >
+            清理孤儿文件
+          </button>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <select
+            value={cleanupCourse}
+            onChange={(e) => setCleanupCourse(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm"
+          >
+            <option value="">选择要清空照片的课程…</option>
+            {courses.map((c) => {
+              const n = courseCleanupPlan(c.id, photos).length;
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.name}（{n} 张）
+                </option>
+              );
+            })}
+          </select>
+          <button
+            disabled={!!busy || !cleanupCourse}
+            onClick={onDeleteCoursePhotos}
+            className="rounded-lg border border-red-200 bg-white px-3 py-2 text-red-600 disabled:opacity-40"
+          >
+            删除该课照片
+          </button>
+        </div>
+        <button
+          disabled={!!busy || photos.length === 0}
+          onClick={onWipeAll}
+          className="mt-2 w-full rounded-lg border border-red-300 bg-red-50 py-2 text-sm font-medium text-red-700 disabled:opacity-40"
+        >
+          清空全部数据（课程 + 照片 + 图片文件）
+        </button>
+        <p className="mt-1.5 text-xs text-slate-400">
+          清空为两级确认（需输入"清空"）；学期设置会一并清掉，重新使用时需到课表页重设。
+        </p>
+      </div>
     </div>
   );
 }
