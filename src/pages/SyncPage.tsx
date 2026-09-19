@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { downloadBlob, exportBundle, importBundle, type ExportSummary, type ImportSummary } from '../lib/backup';
+import { exportPhotosToFolder } from '../lib/photoFolder';
 import { deleteFile } from '../storage/opfs';
-import { getPhotos, putPhoto } from '../storage/db';
-import type { PhotoMeta } from '../types';
+import { getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
+import type { Course, PhotoMeta } from '../types';
 
 function human(bytes: number): string {
   if (bytes > 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -11,6 +12,8 @@ function human(bytes: number): string {
 
 export default function SyncPage() {
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [semesterStart, setSemesterStart] = useState<string | null>(null);
   const [usage, setUsage] = useState<{ used: number; quota: number } | null>(null);
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
@@ -18,6 +21,8 @@ export default function SyncPage() {
 
   const reload = async () => {
     setPhotos(await getPhotos());
+    setCourses(await getCourses());
+    setSemesterStart((await getSettings()).semesterStart);
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est) setUsage({ used: est.usage ?? 0, quota: est.quota ?? 0 });
   };
@@ -67,6 +72,28 @@ export default function SyncPage() {
       await reload();
     } catch (e) {
       setError(`导入失败：${(e as Error).message}`);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onExportFolder() {
+    setBusy('正在复制图片到所选文件夹…');
+    setError('');
+    setMessage('');
+    try {
+      const r = await exportPhotosToFolder(photos, courses ?? [], { semesterStart });
+      setMessage(
+        `已复制 ${r.files} 张图片到所选文件夹中的「${r.folderName}」——按课程分目录、文件名含拍摄时间，并附元数据.json（课表与归属对照）。${
+          r.skipped ? `另有 ${r.skipped} 个文件缺失已跳过。` : ''
+        }`,
+      );
+    } catch (e) {
+      if ((e as DOMException)?.name === 'AbortError') {
+        setMessage('已取消，未复制任何文件。');
+      } else {
+        setError(`导出失败：${(e as Error).message}`);
+      }
     } finally {
       setBusy('');
     }
@@ -134,6 +161,14 @@ export default function SyncPage() {
           className="w-full rounded-xl border border-slate-300 bg-white py-3 disabled:opacity-40"
         >
           导出精简包（仅裁剪图，体积小很多）
+        </button>
+        <button
+          disabled={!!busy || photos.length === 0}
+          onClick={onExportFolder}
+          title="数据本体在浏览器沙箱中无法直接打开物理路径；此操作把全部图片复制成普通文件（按课程分目录），附元数据"
+          className="w-full rounded-xl border border-slate-300 bg-white py-3 disabled:opacity-40"
+        >
+          把图片复制到本地文件夹（按课程分目录）
         </button>
         <label className="block w-full rounded-xl border border-slate-300 bg-white py-3 text-center">
           导入备份包
