@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # vite --host，本机/局域网访问 http://<IP>:5173
-npm test           # node --import tsx --test，52 个 lib 层单测
+npm test           # node --import tsx --test，53 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
 # 发布（需 gh 已登录）

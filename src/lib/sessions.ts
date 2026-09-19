@@ -52,6 +52,25 @@ function slotMatchesAt(slot: ScheduleSlot, at: number): boolean {
   );
 }
 
+export interface PendingGroup {
+  courseId: string;
+  photos: PhotoMeta[];
+}
+
+/** 待确认照片按课程分组（组按张数降序），供归档页"待确认"分课程核对 */
+export function groupPendingByCourse(photos: PhotoMeta[]): PendingGroup[] {
+  const map = new Map<string, PhotoMeta[]>();
+  for (const p of photos) {
+    const key = p.courseId || '';
+    const list = map.get(key) ?? [];
+    list.push(p);
+    map.set(key, list);
+  }
+  return [...map.entries()]
+    .map(([courseId, ps]) => ({ courseId, photos: ps }))
+    .sort((a, b) => b.photos.length - a.photos.length || (a.courseId === '') - (b.courseId === '') || a.courseId.localeCompare(b.courseId));
+}
+
 /**
  * 单张照片的「第几堂」；照片不在课程、无学期配置或不排课时返回 null。
  * （与 groupSessions 的堂数口径一致）

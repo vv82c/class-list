@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupSessions, sessionNumberFor } from './sessions';
+import { groupPendingByCourse, groupSessions, sessionNumberFor } from './sessions';
 import type { Course, PhotoMeta } from '../types';
 
 const SEMESTER_START = '2026-08-31'; // 周一，第1周 = 08-31 ~ 09-06
@@ -83,4 +83,16 @@ test('sessionNumberFor：单张照片查堂数（含补课返回 null）', () =>
   assert.equal(sessionNumberFor(photos[4], math, SEMESTER_START), 5); // 09-18 周五单周
   assert.equal(sessionNumberFor(photos[5], math, SEMESTER_START), null); // 09-11 双周周五，无排课
   assert.equal(sessionNumberFor(photos[0], undefined, SEMESTER_START), null); // 课程未传/不属于
+});
+
+test('groupPendingByCourse：按课程分组、张数降序、未归入兜底组', () => {
+  const p = (id: string, courseId: string): PhotoMeta => ({
+    id, fileName: `${id}.jpg`, mimeType: 'image/jpeg', takenAt: 0, createdAt: 0,
+    courseId, capture: 'auto', note: '',
+  });
+  const groups = groupPendingByCourse([
+    p('a', 'c1'), p('b', 'c1'), p('c', 'c2'), p('d', 'c1'), p('e', ''),
+  ]);
+  assert.deepEqual(groups.map((g) => g.courseId), ['c1', 'c2', '']);
+  assert.deepEqual(groups[0].photos.map((x) => x.id), ['a', 'b', 'd']);
 });

@@ -3,7 +3,7 @@ import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
 import { matchCourse, teachingWeek } from '../lib/matching';
-import { sessionNumberFor } from '../lib/sessions';
+import { groupPendingByCourse, sessionNumberFor } from '../lib/sessions';
 import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
 import { displayFile, type Annotation, type Course, type PhotoMeta } from '../types';
 
@@ -45,32 +45,50 @@ function Thumb({ photo, onOpen }: { photo: PhotoMeta; onOpen?: () => void }) {
 function PendingCard({
   photo,
   courses,
+  semesterStart,
   onAction,
   onOpen,
 }: {
   photo: PhotoMeta;
   courses: Course[];
+  semesterStart: string | null;
   onAction: () => void;
   onOpen: () => void;
 }) {
+  const [fading, setFading] = useState(false);
   const course = courses.find((c) => c.id === photo.courseId);
+  const num = sessionNumberFor(photo, course, semesterStart);
+
+  function confirmSelf() {
+    if (fading) return;
+    setFading(true);
+    setTimeout(async () => {
+      await putPhoto({ ...photo, capture: 'manual' });
+      onAction();
+    }, 220);
+  }
+
   return (
-    <div className="rounded-xl border border-amber-200 bg-white p-2">
+    <div
+      className={`rounded-xl border border-amber-200 bg-white p-2 transition-opacity duration-200 ${
+        fading ? 'opacity-30' : ''
+      }`}
+    >
       <Thumb photo={photo} onOpen={onOpen} />
-      <p className="mt-1 text-[10px] text-slate-400">{formatTime(photo.takenAt)}</p>
+      <p className="mt-1 text-[10px] text-slate-400">
+        {formatTime(photo.takenAt)}
+        {num != null && ` · 第${num}堂`}
+      </p>
       <div className="mt-1 flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: course?.color }} />
         <span className="truncate text-xs font-medium">{course?.name ?? '未知课程'}</span>
       </div>
       <div className="mt-1.5 flex gap-1.5">
         <button
-          onClick={async () => {
-            await putPhoto({ ...photo, capture: 'manual' });
-            onAction();
-          }}
-          className="flex-1 rounded-lg bg-slate-900 py-1.5 text-xs text-white"
+          onClick={confirmSelf}
+          className="flex-1 whitespace-nowrap rounded-lg bg-slate-900 py-1.5 text-xs text-white"
         >
-          确认
+          ✓ 确认
         </button>
         <select
           value=""
@@ -79,7 +97,7 @@ function PendingCard({
             await putPhoto({ ...photo, courseId: e.target.value, capture: 'manual' });
             onAction();
           }}
-          className="rounded-lg border border-slate-300 bg-white px-1 text-xs text-slate-600"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-1 text-xs text-slate-600"
         >
           <option value="">改归属…</option>
           {courses.map((c) => (
@@ -167,6 +185,11 @@ export default function ArchivePage() {
     for (const p of photos ?? []) {
       if (p.capture === 'auto') await putPhoto({ ...p, capture: 'manual' });
     }
+    await reload();
+  }
+
+  async function confirmGroup(list: PhotoMeta[]) {
+    for (const p of list) await putPhoto({ ...p, capture: 'manual' });
     await reload();
   }
 
@@ -306,6 +329,58 @@ export default function ArchivePage() {
                 ? '没有未分类照片'
                 : '还没有照片，去"拍照"页导入一些吧'}
         </p>
+      ) : filter === 'pending' && !selectMode ? (
+        <div className="space-y-5">
+          {groupPendingByCourse(shown).map((g) => {
+            const course = courses.find((c) => c.id === g.courseId);
+            return (
+              <section key={g.courseId || 'none'}>
+                <div className="mb-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: course?.color }}
+                  />
+                  <span className="text-sm font-medium text-slate-800">
+                    {course?.name ?? '未知课程'}
+                  </span>
+                  <span className="text-xs text-slate-400">{g.photos.length} 张</span>
+                  <button
+                    onClick={() => confirmGroup(g.photos)}
+                    className="ml-auto rounded-full bg-slate-900 px-3 py-1 text-xs text-white"
+                  >
+                    ✓ 本课全部正确
+                  </button>
+                </div>
+                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {g.photos.map((p) => {
+                    const idx = shown.indexOf(p);
+                    return (
+                      <li key={p.id} className="relative">
+                        <PendingCard
+                          photo={p}
+                          courses={courses}
+                          semesterStart={semesterStart}
+                          onAction={reload}
+                          onOpen={() => setViewIndex(idx)}
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteOne(p);
+                          }}
+                          className="absolute right-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-sm text-white"
+                          aria-label="删除"
+                        >
+                          ✕
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       ) : (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {shown.map((p, i) => {
@@ -320,6 +395,7 @@ export default function ArchivePage() {
                   <PendingCard
                     photo={p}
                     courses={courses}
+                    semesterStart={semesterStart}
                     onAction={reload}
                     onOpen={() => setViewIndex(i)}
                   />
