@@ -39,7 +39,7 @@
 
 ## 数据安全（务必阅读）
 
-数据存储在**浏览器私有沙箱**（OPFS + IndexedDB）中，云端没有任何副本；清除浏览器站点数据或重装系统 = 数据丢失。请养成习惯：**每月在「备份」页导出一次完整备份包**，存到网盘或移动硬盘——它是唯一的恢复手段。
+数据存储在**浏览器私有沙箱**（OPFS + IndexedDB）中，云端没有任何副本；清除浏览器站点数据或重装系统 = 数据丢失。请养成习惯：**每月在「备份」页导出一次完整备份包**，存到网盘或移动硬盘——它是唯一的恢复手段。应用启动时会自动申请「持久化存储」降低被浏览器自动清理的概率，超过一个月没导出备份时页面会提醒。
 
 ## 明确不做的
 
@@ -51,14 +51,14 @@
 - 存储：OPFS（图片文件）+ IndexedDB（元数据，idb，schema v3）
 - 图像：OpenCV WASM（边缘检测与透视校正，懒加载）+ 纯 JS 自动增强管线 + SVG 矢量标注层
 - PWA：Service Worker 离线缓存（应用壳）
-- 测试：43 个 lib 层单测（`npm test`），覆盖 EXIF 解析、课表匹配与单双周、堂数推导、透视校正、图像增强、标注几何
+- 测试：56 个 lib 层单测（`npm test`），覆盖 EXIF 解析、课表匹配与单双周、堂数推导、透视校正、图像增强、标注几何、备份新鲜度
 
 ## 本地开发
 
 ```bash
 npm install
 npm run dev        # 启动开发服务器
-npm test           # 43 个 lib 层单测
+npm test           # 56 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # 类型检查 + 构建 + 生成 Service Worker
 npx gh-pages -d dist  # 发布到 GitHub Pages

@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # vite --host，本机/局域网访问 http://<IP>:5173
-npm test           # node --import tsx --test，53 个 lib 层单测
+npm test           # node --import tsx --test，56 个 lib 层单测
 npm run typecheck  # tsc --noEmit
 npm run build      # tsc + vite build + 生成 SW
 # 发布（需 gh 已登录）
@@ -38,7 +38,7 @@ Vite + React 18 + TypeScript + Tailwind v4 + react-router（**HashRouter**）+ v
 ```
 src/
   types.ts              数据模型 + displayFile()（取最佳可用图）
-  storage/db.ts         IndexedDB：courses / photos 两表，schema v2
+  storage/db.ts         IndexedDB：courses / photos / settings 三表，schema v3（settings 存学期起点与本机备份提醒时间）
   storage/opfs.ts       OPFS 文件 save/read/delete
   lib/exif.ts           手写 JPEG/PNG EXIF 时间解析（含单测）
   lib/matching.ts       拍摄时间 × 课表匹配：星期+时间窗+教学周次（单双周/周范围），含单测
@@ -47,7 +47,7 @@ src/
   lib/enhance.ts        裁剪图自动增强：自动色阶（去投影偏色）+ 轻锐化，纯函数含单测
   lib/annotations.ts    标注纯函数：笔迹抽稀/命中测试/文字框尺寸，含单测
   components/AnnotationLayer 标注 SVG 渲染层（multiply 混合，随图片 transform 同步）
-  lib/backup.ts         zip 导出/导入合并（v2 起携带 settings：学期起点）
+  lib/backup.ts         zip 导出/导入合并（v2 起携带 settings：学期起点）+ 备份新鲜度 backupAge（含单测）
   lib/photoFolder.ts    照片文件夹导出：导出计划纯函数 + File System Access API 复制到所选目录，含单测
   lib/cleanup.ts        清理：孤儿比对/课程计划/进度键纯函数 + 缓存统计/运行时缓存清理/全量清空编排，含单测
   components/CropEditor 四角拖拽裁剪编辑器（含 persistPhoto / updatePhotoCrop）
@@ -131,7 +131,7 @@ PC-first 之后只有**电脑那份沙箱是真源**（手机沙箱不再有入�
 ### P1：PC-first 待验证清单（需要用户配合）
 
 1. ~~EXIF 经传输保留验证~~ ✅ 基本验证：真实课堂照片（大学美育 09-18 15:21）经实际传输导入后时间正确、自动归课命中。新学期第一课建议再顺手确认一次
-2. **每月备份纪律**：备份页导出完整 zip → 网盘/移动硬盘（唯一副本在浏览器沙箱）
+2. **每月备份纪律**：备份页导出完整 zip（或「复制到本地文件夹」交给网盘自动同步）→ 网盘/移动硬盘（唯一副本在浏览器沙箱）。已内置提醒：超 31 天未导出（或从未导出）时归档页/备份页会提示；应用启动时自动申请 `navigator.storage.persist()` 持久化存储，备份页显示当前存储模式
 3. 固定用一个电脑浏览器打开使用（Chrome/Edge 二选一，两边的沙箱互不相通）
 
 ### P2：小遗留
