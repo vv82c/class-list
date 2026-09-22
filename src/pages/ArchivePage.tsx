@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Lightbox from '../components/Lightbox';
 import RecropDialog from '../components/RecropDialog';
 import { formatTime, usePhotoUrl } from '../lib/ui';
+import { backupAge } from '../lib/backup';
 import { matchCourse, teachingWeek } from '../lib/matching';
 import { groupPendingByCourse, sessionNumberFor } from '../lib/sessions';
 import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
@@ -115,6 +117,7 @@ export default function ArchivePage() {
   const [photos, setPhotos] = useState<PhotoMeta[] | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(null);
   const [weekFilter, setWeekFilter] = useState<'all' | number>('all');
   const [filter, setFilter] = useState<Filter>('all');
   const [selectMode, setSelectMode] = useState(false);
@@ -127,6 +130,7 @@ export default function ArchivePage() {
     setPhotos(ps);
     setCourses(cs);
     setSemesterStart(s.semesterStart);
+    setLastBackupAt(s.lastBackupAt ?? null);
   };
   useEffect(() => {
     reload();
@@ -134,6 +138,7 @@ export default function ArchivePage() {
 
   const pendingCount = photos?.filter((p) => p.capture === 'auto').length ?? 0;
   const starredCount = photos?.filter((p) => p.starred).length ?? 0;
+  const backup = backupAge(lastBackupAt);
   const weekOptions =
     photos && semesterStart
       ? [
@@ -250,6 +255,16 @@ export default function ArchivePage() {
     <div className={`p-4 ${selectMode ? 'pb-24' : ''}`}>
       <h1 className="mb-1 text-xl font-bold">归档</h1>
       <p className="mb-3 text-sm text-slate-500">按拍摄时间自动归课，待确认的请核对</p>
+      {photos !== null && photos.length > 0 && backup.stale && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          ⚠{' '}
+          {backup.days == null ? '这些照片还从未导出过备份' : `距上次备份已 ${backup.days} 天`}
+          ，数据只存在这台电脑的浏览器里 ·{' '}
+          <Link to="/sync" className="font-medium underline underline-offset-2">
+            去备份页导出
+          </Link>
+        </p>
+      )}
       <div className="mb-3 flex items-center gap-2 text-sm">
         {(
           [

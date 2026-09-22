@@ -5,6 +5,22 @@ import type { Course, PhotoMeta } from '../types';
 
 export const BUNDLE_VERSION = 2;
 
+/** 建议每月备份一次，超过这个天数在页面上提醒 */
+export const BACKUP_STALE_DAYS = 31;
+const DAY_MS = 86_400_000;
+
+export interface BackupAge {
+  days: number | null; // 距上次导出的天数；从未导出为 null
+  stale: boolean; // 从未导出或超过 BACKUP_STALE_DAYS 天
+}
+
+/** 备份新鲜度：完整包或「复制到文件夹」导出成功即视为一次有效备份 */
+export function backupAge(lastBackupAt: number | null | undefined, now = Date.now()): BackupAge {
+  if (lastBackupAt == null) return { days: null, stale: true };
+  const days = Math.floor((now - lastBackupAt) / DAY_MS);
+  return { days, stale: days > BACKUP_STALE_DAYS };
+}
+
 export interface ExportSummary {
   fileName: string;
   blob: Blob;
@@ -69,7 +85,8 @@ export async function exportBundle(mode: ExportMode): Promise<ExportSummary> {
       ...p,
       backedUpAt: mode === 'full' ? Date.now() : p.backedUpAt ?? null,
     })),
-    settings: await getSettings(),
+    // 备份包只携带学期配置；lastBackupAt 是本机提醒状态，不随包迁移
+    settings: { semesterStart: (await getSettings()).semesterStart },
   };
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
@@ -106,7 +123,7 @@ export async function importBundle(file: Blob): Promise<ImportSummary> {
 
   const manifest = JSON.parse(await manifestFile.async('string')) as Manifest;
   if (manifest.version > BUNDLE_VERSION) throw new Error('备份包版本更新，请升级应用后再导入');
-  if (manifest.settings) await saveSettings(manifest.settings);
+  if (manifest.settings) await saveSettings({ semesterStart: manifest.settings.semesterStart });
   const summary: ImportSummary = {
     coursesAdded: 0,
     coursesUpdated: 0,

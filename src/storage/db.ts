@@ -4,6 +4,7 @@ import { deleteFile } from './opfs';
 
 export interface AppSettings {
   semesterStart: string | null; // 学期第一周内任一天，'YYYY-MM-DD'（本地时区）
+  lastBackupAt?: number | null; // 最近一次「完整包或文件夹导出」成功的时间；本机提醒用，不进备份包
 }
 
 interface AppDB extends DBSchema {
@@ -49,7 +50,7 @@ function getDB() {
 export async function getSettings(): Promise<AppSettings> {
   const db = await getDB();
   const rec = await db.get('settings', 'app');
-  return { semesterStart: rec?.value?.semesterStart ?? null };
+  return { semesterStart: rec?.value?.semesterStart ?? null, lastBackupAt: rec?.value?.lastBackupAt ?? null };
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<void> {

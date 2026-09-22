@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { downloadBlob, exportBundle, importBundle, type ExportSummary, type ImportSummary } from '../lib/backup';
+import { backupAge, downloadBlob, exportBundle, importBundle, type ExportSummary, type ImportSummary } from '../lib/backup';
 import { exportPhotosToFolder } from '../lib/photoFolder';
 import {
   cacheStats,
@@ -11,7 +11,7 @@ import {
   type CacheStat,
 } from '../lib/cleanup';
 import { deleteFile } from '../storage/opfs';
-import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto } from '../storage/db';
+import { deletePhoto, getCourses, getPhotos, getSettings, putPhoto, saveSettings } from '../storage/db';
 import type { Course, PhotoMeta } from '../types';
 
 function human(bytes: number): string {
@@ -23,6 +23,8 @@ export default function SyncPage() {
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesterStart, setSemesterStart] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(null);
+  const [persisted, setPersisted] = useState<boolean | null>(null);
   const [cacheList, setCacheList] = useState<CacheStat[] | null>(null);
   const [cleanupCourse, setCleanupCourse] = useState('');
   const [usage, setUsage] = useState<{ used: number; quota: number } | null>(null);
@@ -33,7 +35,13 @@ export default function SyncPage() {
   const reload = async () => {
     setPhotos(await getPhotos());
     setCourses(await getCourses());
-    setSemesterStart((await getSettings()).semesterStart);
+    const s = await getSettings();
+    setSemesterStart(s.semesterStart);
+    setLastBackupAt(s.lastBackupAt ?? null);
+    navigator.storage
+      ?.persisted?.()
+      .then(setPersisted)
+      .catch(() => setPersisted(null));
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est) setUsage({ used: est.usage ?? 0, quota: est.quota ?? 0 });
     cacheStats()
@@ -49,6 +57,16 @@ export default function SyncPage() {
     (p) => p.backedUpAt && !p.originalRemoved && p.fileName && !!(p.thumbFileName || p.cropFileName),
   );
 
+  const backup = backupAge(lastBackupAt);
+  const backupLine =
+    backup.days == null
+      ? photos.length > 0
+        ? '还从未导出过备份：数据目前只有浏览器沙箱这一份'
+        : null
+      : backup.stale
+        ? `距上次备份已 ${backup.days} 天（建议每月一次）`
+        : `距上次备份 ${backup.days} 天`;
+
   async function onExport(mode: 'full' | 'lite') {
     setBusy(mode === 'full' ? '正在打包完整备份…' : '正在打包精简包…');
     setError('');
@@ -56,6 +74,7 @@ export default function SyncPage() {
     try {
       const result: ExportSummary = await exportBundle(mode);
       downloadBlob(result.blob, result.fileName);
+      if (mode === 'full') await saveSettings({ lastBackupAt: Date.now() });
       setMessage(
         `已生成 ${result.fileName}（${human(result.blob.size)}，含 ${result.photos} 张照片${
           result.skipped ? `，${result.skipped} 个文件读取失败已跳过` : ''
@@ -97,6 +116,7 @@ export default function SyncPage() {
     setMessage('');
     try {
       const r = await exportPhotosToFolder(photos, courses ?? [], { semesterStart });
+      await saveSettings({ lastBackupAt: Date.now() });
       setMessage(
         `已复制 ${r.files} 张图片到所选文件夹中的「${r.folderName}」——按课程分目录、文件名含拍摄时间，并附元数据.json（课表与归属对照）。${
           r.skipped ? `另有 ${r.skipped} 个文件缺失已跳过。` : ''
@@ -234,9 +254,19 @@ export default function SyncPage() {
   return (
     <div className="p-4">
       <h1 className="mb-1 text-xl font-bold">备份</h1>
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-2 text-sm text-slate-500">
         数据只存在这台电脑的浏览器里。导出完整备份包并存到网盘/移动硬盘，是数据唯一的异地副本——建议每月一次。
       </p>
+      {backupLine && (
+        <p
+          className={`mb-4 rounded-lg px-3 py-2 text-xs ${
+            photos.length > 0 && backup.stale ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {backup.stale ? '⚠ ' : ''}
+          {backupLine}
+        </p>
+      )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
@@ -260,6 +290,14 @@ export default function SyncPage() {
           <p className="text-lg font-semibold">{cleanable.length}</p>
         </div>
       </div>
+      <p className="-mt-2 mb-4 text-xs text-slate-400">
+        存储模式：
+        {persisted == null
+          ? '未知'
+          : persisted
+            ? '持久化——浏览器承诺不自动清理（清理工具、重装系统仍会清掉，备份才是底线）'
+            : '尽力保留——磁盘紧张时浏览器可能自动清理，把本站安装为桌面应用可提高保护等级'}
+      </p>
 
       <div className="space-y-2">
         <button
